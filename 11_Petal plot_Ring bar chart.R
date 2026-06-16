@@ -1,17 +1,18 @@
-# 参考：https://mp.weixin.qq.com/s/udbFm4TTaVe9ZXjinizKNA   花瓣图（环形柱状图）  径向堆积柱状图
-# 清空环境
+# Reference: https://mp.weixin.qq.com/s/udbFm4TTaVe9ZXjinizKNA
+# Petal plot (radial bar chart) / Radial stacked bar chart
+# Clear environment
 rm(list = ls())
 gc()
 
-# 工作路径
+# Working directory
 setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-cat("【初始化】当前工作路径：", getwd(), "\n\n")
+cat("[Initialization] Current working directory: ", getwd(), "\n\n")
 
-# 创建输出目录
-out_dir <- "./11_花瓣图_环形柱状图/"
+# Create output directory
+out_dir <- "./11_PetalPlot_RadialBarChart/"
 dir.create(out_dir, showWarnings = F, recursive = T)
 
-# 加载包
+# Load packages
 library(ggplot2)
 library(dplyr)
 library(tidyr)
@@ -19,7 +20,7 @@ library(ggforce)
 library(patchwork)
 
 # ========================
-# 你的数据（3组验证集）
+# Input data (3 validation cohorts)
 # ========================
 metrics <- c("Accuracy", "AUC", "F1", "Sensitivity", "Specificity")
 
@@ -35,7 +36,7 @@ df <- data.frame(
 )
 
 # ========================
-# 你提供的配色（5个颜色 + 名称对应）
+# Custom color palette (5 colors matched with metrics)
 # ========================
 custom_palette <- c(
   "Accuracy"      = "#b9d7e5",
@@ -46,7 +47,7 @@ custom_palette <- c(
 )
 
 # ========================
-# 花瓣绘图函数（带图例）
+# Petal plotting function (with legend)
 # ========================
 plot_single_petal <- function(data, group_name){
   
@@ -76,29 +77,29 @@ plot_single_petal <- function(data, group_name){
               size = 3.5, fontface="bold") +
     scale_fill_manual(values = custom_palette) +
     coord_radial() +
-    labs(title = group_name, fill="Indicator") +  # 修改图例标题
+    labs(title = group_name, fill="Indicator") +
     theme_void() +
     theme(
       plot.title = element_text(hjust=0.5, size=14, face="bold"),
-      legend.position = "right",  # 显示图例
+      legend.position = "right",
       legend.text = element_text(size=11),
       legend.title = element_text(size=12, face="bold")
     )
 }
 
 # ========================
-# 分别绘制 3 个花瓣图
+# Generate 3 separate petal plots
 # ========================
 p1 <- df %>% select(Metric, value=Validation_1) %>% plot_single_petal("Validation 1")
 p2 <- df %>% select(Metric, value=Validation_2) %>% plot_single_petal("Validation 2")
 p3 <- df %>% select(Metric, value=Validation_3) %>% plot_single_petal("Validation 3")
 
-# 拼接 1行3张 + 共享图例
+# Arrange plots in one row with shared legend
 p_all <- p1 + p2 + p3 + plot_layout(ncol=3, guides = "collect") & 
   theme(legend.position = "right")
 
 # ========================
-# 保存高清图
+# Export high-resolution figures
 # ========================
 ggsave(
   paste0(out_dir, "Model_Performance_Smooth_PetalPlot_3Groups_WithLegend.pdf"),
