@@ -1,35 +1,37 @@
-# 一、Silhouette coefficients（轮廓系数，前文补充精简版）1. 公式\(s_i=\frac{b_i-a_i}{\max(a_i,b_i)}\)
-# \(a_i\)：样本i到同组（正常 / AML）其余样本平均距离；
-# \(b_i\)：样本i到另一组全部样本平均距离；
-# 整体得分 = 全部样本 \(s_i\) 均值，\([-1,1]\)，越高分组区分越好。
+# I. Silhouette coefficients (Brief supplementary version)
+# 1. Formula: \(s_i=\frac{b_i-a_i}{\max(a_i,b_i)}\)
+# \(a_i\): Average distance from sample i to other samples within the same group (Normal / AML);
+# \(b_i\): Average distance from sample i to all samples in the other group;
+# Overall score = mean value of all \(s_i\), range \([-1,1]\); higher value indicates better group separation.
 
-# 二、JS-score  代码在/home/weili/Project/AML/human/AML_combined_analyse/JScore_code中
+# II. JS-score
+# Code repository: /home/weili/Project/AML/human/AML_combined_analyse/JScore_code
 
 
 
 
 # ==============================================================
-# Step0 环境初始化 + 路径配置
+# Step0 Environment initialization & path configuration
 # ==============================================================
 rm(list = ls())
 gc()
 options(stringsAsFactors = FALSE)
 
-# 工作目录
-setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-cat("初始工作路径：", getwd(), "\n")
-# 加载全局配置
+# Working directory
+setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.Plotting_Code/")
+cat("Initial working directory: ", getwd(), "\n")
+# Load global configuration
 source("/home/weili/Project/AML/human/AML_combined_analyse/0.Enviroment.R")
 
-# 创建输出文件夹
+# Create output folder
 out_folder <- "./17_JS-score_Silhouette_coefficients//"
 dir.create(out_folder, showWarnings = F, recursive = T)
 setwd(out_folder)
-cat("当前输出目录：", getwd(), "\n")
+cat("Current output directory: ", getwd(), "\n")
 
 
 
-# ========== JS-score柱状图-全部数据==========
+# ========== JS-score Half-violin plot - Full dataset ==========
 library(ggplot2)
 library(dplyr)
 library(gghalves)
@@ -47,12 +49,12 @@ rna_data <- lapply(names(rna_files), function(type){
   df$RNA_ID <- rownames(df)
   df %>%
     dplyr::select(RNA_ID, JSscore) %>%
-    mutate(JSscore = as.numeric(JSscore),RNA_Type = type)
+    mutate(JSscore = as.numeric(JSscore), RNA_Type = type)
 }) %>% bind_rows()
 
 rna_data <- rna_data[-1,]
 
-# 清洗数据
+# Data cleaning
 # clean_data <- rna_data %>%
 #   filter(!is.na(JSscore)) %>%
 #   filter(JSscore > 0 & JSscore < 1) %>%
@@ -68,14 +70,14 @@ clean_data <- rna_data
 
 
 rna_color <- c("mRNA"="#AD3D3E","eRNA"="#96CEB4","lncRNA"="#4ECDC4","miRNA"="#45B7D1")
-# 强制X轴排布顺序：mRNA  eRNA  lncRNA  miRNA
+# Fix X-axis order: mRNA, eRNA, lncRNA, miRNA
 clean_data$RNA_Type <- factor(clean_data$RNA_Type,
                               levels = c("mRNA","eRNA","lncRNA","miRNA"))
-# 比较组合不变：3种ncRNA分别vs mRNA
+# Comparison sets: three ncRNA types vs mRNA respectively
 comp_list <- list(c("eRNA","mRNA"),c("lncRNA","mRNA"),c("miRNA","mRNA"))
 
 
-# 出图
+# Generate plot
 pdf("./RNA_JSscore_HalfViolin_Box_Jitter_ncRNA_vs_mRNA.pdf",width=7,height=6)
 p <- ggplot(clean_data,aes(x=RNA_Type,y=JSscore,color=RNA_Type,fill=RNA_Type))+
   geom_half_violin(side="r",trim=F,alpha=0.7,width=0.5,position=position_nudge(x=0.12))+
@@ -105,7 +107,7 @@ dev.off()
 
 
 
-# ==========【关键：批量运行wilcox检验，控制台打印P值
+# ==========【Key: Batch Wilcoxon test, print P-values to console
 cat("==================== Wilcox rank-sum test result ====================\n")
 for(cc in comp_list){
   g1 <- cc[1]
@@ -127,30 +129,30 @@ cat("=====================================================================\n")
 
 
 
-# ========== JS-score柱状图-随机抽取1000个基因==========
-#  随机抽取1000个基因画图
+# ========== JS-score Half-violin plot - Random subsample of 1000 genes per group ==========
+# Randomly sample 1000 genes for plotting
 rm(list = ls())
 gc()
 options(stringsAsFactors = FALSE)
 
-# 工作目录
-setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-cat("初始工作路径：", getwd(), "\n")
-# 加载全局配置
+# Working directory
+setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.Plotting_Code/")
+cat("Initial working directory: ", getwd(), "\n")
+# Load global configuration
 source("/home/weili/Project/AML/human/AML_combined_analyse/0.Enviroment.R")
 
-# 创建输出文件夹
+# Create output folder
 out_folder <- "./17_JS-score_Silhouette_coefficients//"
 dir.create(out_folder, showWarnings = F, recursive = T)
 setwd(out_folder)
-cat("当前输出目录：", getwd(), "\n")
+cat("Current output directory: ", getwd(), "\n")
 
 library(ggplot2)
 library(dplyr)
 library(gghalves)
 library(ggsignif)
 
-# 文件路径
+# File paths
 rna_files <- list(
   miRNA = "../../Outdata/1.rawdata/3.JScore_filter/4.2.JSscore_H_miRNA.txt",
   mRNA = "../../Outdata/1.rawdata/3.JScore_filter/4.2.JSscore_H_mRNA.txt",
@@ -158,17 +160,17 @@ rna_files <- list(
   lncRNA = "../../Outdata/1.rawdata/3.JScore_filter/4.2.JSscore_H_lncRNA.txt"
 )
 
-# 读取数据
+# Read data
 rna_data <- lapply(names(rna_files), function(type){
   df <- read.table(rna_files[[type]])
   df$RNA_ID <- rownames(df)
   df %>%
     dplyr::select(RNA_ID, JSscore) %>%
-    mutate(JSscore = as.numeric(JSscore),RNA_Type = type)
+    mutate(JSscore = as.numeric(JSscore), RNA_Type = type)
 }) %>% bind_rows()
 rna_data <- rna_data[-1,]
 
-# 清洗数据
+# Data cleaning
 clean_data <- rna_data %>%
   filter(!is.na(JSscore)) %>%
   filter(JSscore > 0 & JSscore < 1) %>%
@@ -181,33 +183,33 @@ clean_data <- rna_data %>%
   ungroup()
 # clean_data <- rna_data
 
-# ==========1、固定X轴顺序：mRNA排在第一位
+# ==========1. Fix X-axis order: mRNA as the first category
 clean_data$RNA_Type <- factor(clean_data$RNA_Type,
                               levels = c("mRNA","eRNA","lncRNA","miRNA"))
 
-# ==========2、每组随机抽样1000个基因用于散点
+# ==========2. Randomly sample 1000 genes per RNA type for jitter points
 set.seed(123)
 sub_data <- clean_data %>%
   group_by(RNA_Type) %>%
   slice_sample(n = 1000) %>%
   ungroup()
 
-# ==========配色+比较组合：3类ncRNA分别对比mRNA
+# ==========Color palette + comparison sets: three ncRNA types vs mRNA
 rna_color <- c("mRNA"="#FF6B6B","eRNA"="#96CEB4","lncRNA"="#4ECDC4","miRNA"="#45B7D1")
 comp_list <- list(c("eRNA","mRNA"),c("lncRNA","mRNA"),c("miRNA","mRNA"))
 
-# 出图
+# Generate plot
 pdf("./RNA_JSscore_HalfViolin_SubSample1000.pdf",width=7,height=6)
 p <- ggplot(clean_data,aes(x=RNA_Type,y=JSscore,color=RNA_Type,fill=RNA_Type))+
-  # 右半小提琴（全部数据）
+  # Right half violin (full dataset)
   geom_half_violin(side="r",trim=F,alpha=0.7,width=0.5,position=position_nudge(x=0.12))+
-  # 箱线（全部数据）
+  # Boxplot (full dataset)
   geom_boxplot(width=0.22,outlier.shape=NA,alpha=0.7,position=position_nudge(x=-0.1))+
-  # 均值黑点（全部数据）
+  # Mean value point (full dataset)
   stat_summary(fun="mean",geom="point",shape=20,size=3,color="black")+
-  # 散点只用抽样后的子集sub_data
+  # Jitter points only using subsampled data sub_data
   geom_jitter(data=sub_data,width=0.1,size=0.8,alpha=0.35)+
-  # 显著性
+  # Significance annotation
   geom_signif(
     comparisons = comp_list,
     test = "wilcox.test",
@@ -230,13 +232,13 @@ print(p)
 dev.off()
 
 
-# ========== 四类 RNA 批量算 Silhouette==========
+# ========== Calculate Silhouette coefficients for four RNA types in batch ==========
 library(data.table)
-library(cluster)   # 必须提前加载，才能识别silhouette()
+library(cluster)   # Must be loaded in advance to call silhouette()
 library(dplyr)
 library(ggplot2)
 
-# 封装读取函数
+# Wrapper function for expression matrix reading
 read_rna_exp <- function(path){
   dt = fread(path)
   gn = dt$V1
@@ -245,13 +247,13 @@ read_rna_exp <- function(path){
   return(exp_df)
 }
 
-# 逐个读取
+# Read each RNA expression matrix
 mRNA   <- read_rna_exp("../../Outdata/5.all_data_harmony/combat_all_mRNA.csv")
 lncRNA <- read_rna_exp("../../Outdata/5.all_data_harmony/combat_all_lncRNA.csv")
 miRNA  <- read_rna_exp("../../Outdata/5.all_data_harmony/combat_all_miRNA.csv")
 eRNA   <- read_rna_exp("../../Outdata/5.all_data_harmony/combat_all_eRNA.csv")
 
-# 列表整合
+# Integrate into list
 exp_list <- list(
   mRNA=mRNA,
   lncRNA=lncRNA,
@@ -259,7 +261,7 @@ exp_list <- list(
   eRNA=eRNA
 )
 
-# 分组信息
+# Sample grouping information
 group_info  <- read.csv("../../Outdata/5.all_data_harmony/5.0_all_expr_group_batch_info.csv",row.names=1)
 group_info$Group <- ifelse(group_info$Group==1,"Tumor","Normal")
 sample_group <- factor(group_info$Group)
@@ -269,7 +271,7 @@ group_df_all <- data.frame(
   grp    = as.character(sample_group)
 )
 
-# 循环计算轮廓系数
+# Loop to compute silhouette coefficient for each RNA type
 sil_result <- data.frame()
 for(rna_name in names(exp_list)){
   mat <- exp_list[[rna_name]]
@@ -296,15 +298,15 @@ print(sil_result)
 # 4     eRNA             0.03156884
 write.csv(sil_result,".//Silhouette_allRNA_result.csv",row.names=F)
 
-# 柱状图
+# Bar plot for silhouette score
 sil_result$RNA_Type <- factor(sil_result$RNA_Type,levels=c("mRNA","eRNA","lncRNA","miRNA"))
 rna_color <- c("mRNA"="#AD3D3E","eRNA"="#96CEB4","lncRNA"="#4ECDC4","miRNA"="#45B7D1")
 comp_list <- list(c("eRNA","mRNA"),c("lncRNA","mRNA"),c("miRNA","mRNA"))
 
 
-# 升序：从小到大
+# Sort ascending: from smallest to largest silhouette value
 sil_sort <- sil_result[order(sil_result$Silhouette_Coefficient), ]
-# 关键：用排序后的行固定factor顺序
+# Fix factor order using sorted rows
 sil_sort$RNA_Type <- factor(sil_sort$RNA_Type, levels = sil_sort$RNA_Type)
 
 
@@ -321,5 +323,3 @@ p <- ggplot(sil_sort,aes(x=RNA_Type,y=Silhouette_Coefficient,fill=RNA_Type))+
         axis.title.y=element_text(face="bold",size=13))
 print(p)
 dev.off()
-
-
