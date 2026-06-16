@@ -1,14 +1,14 @@
-# 0. 环境初始化 -----------------------------------------------------------
+# 0. Environment Initialization -----------------------------------------------------------
 rm(list = ls())
 gc()
 
-setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码//")
-cat("【初始化】当前工作路径：", getwd(), "\n\n")
+setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.Plot_Code//")
+cat("[Initialization] Current working directory: ", getwd(), "\n\n")
 
-dir.create("./23_预后分析_多模型组合/", showWarnings = FALSE, recursive = TRUE)
+dir.create("./23_Multi_Model_Prognostic_Analysis/", showWarnings = FALSE, recursive = TRUE)
 
 
-# TCGA训练集；GSE165656 测试集
+# TCGA training cohort; GSE165656 external validation cohort
 
 
 ############################################################
@@ -25,7 +25,7 @@ dir.create("./23_预后分析_多模型组合/", showWarnings = FALSE, recursive
 
 
 ############################################################
-## 0. Packages
+## 0. Load Required Packages
 ############################################################
 
 pkg_list <- c(
@@ -67,22 +67,22 @@ library(pheatmap)
 set.seed(123)
 
 ############################################################
-## 1. Paths
+## 1. File Path Configuration
 ############################################################
 
 tcga_file <- "../TCGA_data/TCGA_LAML_879_feature_expr_with_ostime_new_136_samples.csv"
 gse_file  <- "../TCGA_data/GSE165656_LAML_879_feature_expr_with_ostime_new.csv"
 
-univ_cox_file <- "../Outdata/7.Prognostic analyse/2_univariate_cox_significant_genes.csv"
+univ_cox_file <- "../Outdata/7.Prognostic_analysis/2_univariate_cox_significant_genes.csv"
 
-outdata_dir <- "./23_预后分析_多模型组合/outdata"
-outplot_dir <- "./23_预后分析_多模型组合//outplot"
+outdata_dir <- "./23_Multi_Model_Prognostic_Analysis/outdata"
+outplot_dir <- "./23_Multi_Model_Prognostic_Analysis//outplot"
 
 dir.create(outdata_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(outplot_dir, recursive = TRUE, showWarnings = FALSE)
 
 ############################################################
-## 2. Read and clean data
+## 2. Import and Clean Raw Data
 ############################################################
 
 cat("\n==============================\n")
@@ -107,11 +107,11 @@ colnames(tcga)[colnames(tcga) == "sample"] <- "ID"
 colnames(gse)[colnames(gse) == "sample"] <- "ID"
 
 if (!all(c("ID", "OS.time", "OS") %in% colnames(tcga))) {
-  stop("TCGA 数据必须包含 ID, OS.time, OS 三列。")
+  stop("TCGA dataset must contain three columns: ID, OS.time, OS.")
 }
 
 if (!all(c("ID", "OS.time", "OS") %in% colnames(gse))) {
-  stop("GSE165656 数据必须包含 ID, OS.time, OS 三列。")
+  stop("GSE165656 dataset must contain three columns: ID, OS.time, OS.")
 }
 
 tcga$OS.time <- as.numeric(as.character(tcga$OS.time))
@@ -120,9 +120,9 @@ tcga$OS      <- as.numeric(as.character(tcga$OS))
 gse$OS.time <- as.numeric(as.character(gse$OS.time))
 gse$OS      <- as.numeric(as.character(gse$OS))
 
-## 注意：
-## 如果你的 GSE165656 文件里的 OS.time 已经是 day，请把下一行注释掉。
-## 如果 GSE165656 文件里的 OS.time 是 week，则保留下一行。
+## Note:
+## If OS.time in GSE165656 file is already in days, comment out the next line.
+## If OS.time in GSE165656 file is in weeks, retain the next line.
 gse$OS.time <- gse$OS.time * 7
 
 tcga <- tcga[!is.na(tcga$OS.time) & !is.na(tcga$OS), ]
@@ -138,11 +138,11 @@ cat("TCGA samples:", nrow(tcga), "\n")
 cat("GSE165656 samples:", nrow(gse), "\n")
 
 ############################################################
-## 3. Common genes and candidate genes
+## 3. Identify Shared Genes and Candidate Predictive Genes
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 2: Preparing genes\n")
+cat("Step 2: Preparing gene list\n")
 cat("==============================\n")
 
 clin_cols <- c("ID", "OS.time", "OS")
@@ -152,12 +152,12 @@ gse_genes  <- setdiff(colnames(gse), clin_cols)
 
 common_genes <- intersect(tcga_genes, gse_genes)
 
-cat("TCGA gene number:", length(tcga_genes), "\n")
-cat("GSE gene number:", length(gse_genes), "\n")
-cat("Common gene number:", length(common_genes), "\n")
+cat("TCGA gene count:", length(tcga_genes), "\n")
+cat("GSE gene count:", length(gse_genes), "\n")
+cat("Shared gene count:", length(common_genes), "\n")
 
-## 如果存在单因素 Cox 显著基因文件，则使用该文件进一步筛选；
-## 如果不存在，则使用所有共同基因。
+## If univariate Cox significant gene file exists, further filter candidates;
+## If not, use all shared genes as candidates.
 if (file.exists(univ_cox_file)) {
   
   univ_genes_df <- read.csv(
@@ -171,24 +171,24 @@ if (file.exists(univ_cox_file)) {
   } else if ("gene_name" %in% colnames(univ_genes_df)) {
     univ_genes <- unique(univ_genes_df$gene_name)
   } else {
-    stop("单因素 Cox 文件中未找到 gene 或 gene_name 列。")
+    stop("Column 'gene' or 'gene_name' not found in univariate Cox result file.")
   }
   
   model_genes <- intersect(common_genes, univ_genes)
   
-  cat("Using univariate Cox significant genes.\n")
-  cat("Candidate gene number:", length(model_genes), "\n")
+  cat("Using genes with significant univariate Cox P-values.\n")
+  cat("Candidate modeling gene count:", length(model_genes), "\n")
   
 } else {
   
   model_genes <- common_genes
   
-  cat("Univariate Cox file not found. Using all common genes.\n")
-  cat("Candidate gene number:", length(model_genes), "\n")
+  cat("Univariate Cox result file missing. All shared genes will be used.\n")
+  cat("Candidate modeling gene count:", length(model_genes), "\n")
 }
 
 if (length(model_genes) < 2) {
-  stop("候选建模基因少于 2 个，请检查基因名。")
+  stop("Fewer than 2 candidate modeling genes detected, please verify gene names.")
 }
 
 tcga <- tcga[, c(clin_cols, model_genes)]
@@ -210,23 +210,23 @@ na_genes <- model_genes[
 ]
 
 if (length(na_genes) > 0) {
-  cat("Remove genes with NA:", length(na_genes), "\n")
+  cat("Remove genes containing NA values:", length(na_genes), "\n")
   model_genes <- setdiff(model_genes, na_genes)
 }
 
 if (length(model_genes) < 2) {
-  stop("去除 NA 基因后，候选基因少于 2 个。")
+  stop("Fewer than 2 candidate genes remaining after removing genes with NA values.")
 }
 
 tcga <- tcga[, c(clin_cols, model_genes)]
 gse  <- gse[, c(clin_cols, model_genes)]
 
 ############################################################
-## 4. Standardization using training parameters
+## 4. Standardization Using Training Cohort Mean & SD
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 3: Standardization\n")
+cat("Step 3: Feature standardization\n")
 cat("==============================\n")
 
 x_train_raw <- as.matrix(tcga[, model_genes, drop = FALSE])
@@ -265,7 +265,7 @@ val_dd_list <- list(
 
 pre_var <- colnames(est_dd)[-c(1, 2)]
 
-cat("Final modeling gene number:", length(pre_var), "\n")
+cat("Final modeling gene count:", length(pre_var), "\n")
 
 write_tsv(
   data.frame(gene = pre_var),
@@ -280,11 +280,11 @@ save(
 )
 
 ############################################################
-## 5. Utility functions
+## 5. Utility Helper Functions
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 4: Defining functions\n")
+cat("Step 4: Define utility functions\n")
 cat("==============================\n")
 
 safe_model <- function(model_name, expr) {
@@ -299,15 +299,15 @@ safe_model <- function(model_name, expr) {
         expr,
         warning = function(w) {
           warn_msg <<- c(warn_msg, conditionMessage(w))
-          cat("Warning in:", model_name, "\n")
-          cat("Warning:", conditionMessage(w), "\n")
+          cat("Warning triggered in:", model_name, "\n")
+          cat("Warning message:", conditionMessage(w), "\n")
           invokeRestart("muffleWarning")
         }
       )
     },
     error = function(e) {
-      cat("Failed:", model_name, "\n")
-      cat("Error:", conditionMessage(e), "\n")
+      cat("Model failed:", model_name, "\n")
+      cat("Error message:", conditionMessage(e), "\n")
       return(NULL)
     }
   )
@@ -348,11 +348,11 @@ add_result <- function(result, model_name, rs_list) {
 }
 
 ############################################################
-## 6. Feature selection functions
+## 6. Feature Selection Functions
 ############################################################
 
 ############################################################
-## 修改 1：设置筛选后最多保留多少个基因
+## Modification 1: Maximum number of genes retained after filtering
 ############################################################
 
 max_feature_genes <- 30
@@ -362,8 +362,8 @@ select_all <- function(est_dd, pre_var) {
 }
 
 ############################################################
-## 修改 2：RSF 筛基因
-## 只保留 VIMP 排名前 max_feature_genes 的基因
+## Modification 2: RSF feature selection
+## Retain only top max_feature_genes genes ranked by VIMP
 ############################################################
 
 select_rsf <- function(est_dd, pre_var, seed = 123,
@@ -388,10 +388,10 @@ select_rsf <- function(est_dd, pre_var, seed = 123,
   vimp <- vimp[!is.na(vimp)]
   
   if (length(vimp) < 2) {
-    stop("RSF importance 结果少于 2 个基因。")
+    stop("Fewer than 2 genes with valid RSF importance scores.")
   }
   
-  ## 优先保留 VIMP > 0 的基因
+  ## Prioritize genes with positive VIMP values
   vimp_pos <- vimp[vimp > 0]
   
   if (length(vimp_pos) >= 2) {
@@ -412,8 +412,8 @@ select_rsf <- function(est_dd, pre_var, seed = 123,
 }
 
 ############################################################
-## 修改 3：LASSO 筛基因
-## 只保留绝对系数排名前 max_feature_genes 的基因
+## Modification 3: LASSO feature selection
+## Retain only top max_feature_genes genes ranked by absolute coefficient
 ############################################################
 
 select_lasso <- function(est_dd, pre_var, seed = 123,
@@ -461,8 +461,8 @@ select_lasso <- function(est_dd, pre_var, seed = 123,
 }
 
 ############################################################
-## 修改 4：CoxBoost 筛基因
-## 只保留绝对系数排名前 max_feature_genes 的基因
+## Modification 4: CoxBoost feature selection
+## Retain only top max_feature_genes genes ranked by absolute coefficient
 ############################################################
 
 select_coxboost <- function(est_dd, pre_var, seed = 123,
@@ -520,9 +520,9 @@ select_stepcox_backward <- function(est_dd, pre_var, max_genes_for_step = 80) {
   if (length(pre_var) > max_genes_for_step) {
     stop(
       paste0(
-        "StepCox is skipped because gene number > ",
+        "StepCox skipped: total gene count exceeds ",
         max_genes_for_step,
-        ". Use prior feature selection before StepCox."
+        ". Apply feature filtering prior to StepCox."
       )
     )
   }
@@ -547,14 +547,14 @@ select_stepcox_backward <- function(est_dd, pre_var, max_genes_for_step = 80) {
 }
 
 ############################################################
-## 7. Modeling functions
+## 7. Model Fitting Functions
 ############################################################
 
 ############################################################
-## 修改 1：普通 Cox 建模函数
-## 目的：
-## 1. 不允许 All 137 genes 直接 Cox
-## 2. 只允许筛选后少量基因进入 Cox
+## Modification 1: Standard Cox model fitting function
+## Constraints:
+## 1. Raw full gene set (All) cannot be directly input to Cox
+## 2. Only filtered small gene sets are allowed for Cox regression
 ############################################################
 
 fit_cox_model <- function(est_dd, val_dd_list, rid,
@@ -564,14 +564,14 @@ fit_cox_model <- function(est_dd, val_dd_list, rid,
   event_num <- sum(est_dd$OS == 1, na.rm = TRUE)
   
   if (length(rid) < 2) {
-    stop("普通 Cox 跳过：基因数少于 2。")
+    stop("Skip standard Cox: fewer than 2 candidate genes.")
   }
   
   if (length(rid) > max_genes_for_cox) {
     stop(
       paste0(
-        "普通 Cox 跳过：筛选后基因数 = ", length(rid),
-        "，超过 max_genes_for_cox = ", max_genes_for_cox
+        "Skip standard Cox: filtered gene count = ", length(rid),
+        ", exceeds max_genes_for_cox = ", max_genes_for_cox
       )
     )
   }
@@ -579,9 +579,9 @@ fit_cox_model <- function(est_dd, val_dd_list, rid,
   if (length(rid) >= floor(event_num / epv_cutoff)) {
     stop(
       paste0(
-        "普通 Cox 跳过：筛选后基因数 = ", length(rid),
-        "，事件数 = ", event_num,
-        "，变量数仍然偏多。"
+        "Skip standard Cox: filtered gene count = ", length(rid),
+        ", total events = ", event_num,
+        ", variable count is too high relative to events."
       )
     )
   }
@@ -595,7 +595,7 @@ fit_cox_model <- function(est_dd, val_dd_list, rid,
   )
   
   if (any(is.na(coef(fit)))) {
-    stop("普通 Cox 拟合后存在 NA 系数，跳过。")
+    stop("Skip standard Cox: NA coefficients detected after model fitting.")
   }
   
   rs <- lapply(val_dd_list, function(dat) {
@@ -624,10 +624,10 @@ fit_cox_model <- function(est_dd, val_dd_list, rid,
 }
 
 ############################################################
-## 修改 2：StepCox 建模函数
-## 目的：
-## 1. 不允许 All 137 genes 直接 StepCox
-## 2. 只允许筛选后少量基因进入 StepCox
+## Modification 2: Stepwise Cox model fitting function
+## Constraints:
+## 1. Raw full gene set (All) cannot be directly input to StepCox
+## 2. Only filtered small gene sets are allowed for StepCox
 ############################################################
 
 fit_stepcox_model <- function(est_dd, val_dd_list, rid,
@@ -638,14 +638,14 @@ fit_stepcox_model <- function(est_dd, val_dd_list, rid,
   event_num <- sum(est_dd$OS == 1, na.rm = TRUE)
   
   if (length(rid) < 2) {
-    stop("StepCox 跳过：基因数少于 2。")
+    stop("Skip StepCox: fewer than 2 candidate genes.")
   }
   
   if (length(rid) > max_genes_for_stepcox) {
     stop(
       paste0(
-        "StepCox 跳过：筛选后基因数 = ", length(rid),
-        "，超过 max_genes_for_stepcox = ", max_genes_for_stepcox
+        "Skip StepCox: filtered gene count = ", length(rid),
+        ", exceeds max_genes_for_stepcox = ", max_genes_for_stepcox
       )
     )
   }
@@ -653,9 +653,9 @@ fit_stepcox_model <- function(est_dd, val_dd_list, rid,
   if (length(rid) >= floor(event_num / epv_cutoff)) {
     stop(
       paste0(
-        "StepCox 跳过：筛选后基因数 = ", length(rid),
-        "，事件数 = ", event_num,
-        "，变量数仍然偏多。"
+        "Skip StepCox: filtered gene count = ", length(rid),
+        ", total events = ", event_num,
+        ", variable count is too high relative to events."
       )
     )
   }
@@ -669,7 +669,7 @@ fit_stepcox_model <- function(est_dd, val_dd_list, rid,
   )
   
   if (any(is.na(coef(fit0)))) {
-    stop("StepCox 初始 Cox 模型存在 NA 系数，跳过。")
+    stop("Skip StepCox: NA coefficients detected in initial Cox model.")
   }
   
   fit <- step(
@@ -681,11 +681,11 @@ fit_stepcox_model <- function(est_dd, val_dd_list, rid,
   final_genes <- names(coef(fit))
   
   if (length(final_genes) < 1) {
-    stop("StepCox final model has no gene.")
+    stop("StepCox final model contains no predictive genes.")
   }
   
   if (any(is.na(coef(fit)))) {
-    stop("StepCox 最终模型存在 NA 系数，跳过。")
+    stop("Skip StepCox: NA coefficients detected in final model.")
   }
   
   rs <- lapply(val_dd_list, function(dat) {
@@ -1002,15 +1002,15 @@ fit_svm_model <- function(est_dd, val_dd_list, rid, seed = 123) {
 }
 
 ############################################################
-## 8. Define feature selectors and model builders
+## 8. Define Feature Selection & Model Training Pipelines
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 5: Defining model combinations\n")
+cat("Step 5: Define all model combinations\n")
 cat("==============================\n")
 
 ############################################################
-## 修改 5：所有筛选方法最多保留 max_feature_genes 个基因
+## Modification 5: All feature selection pipelines limited to max_feature_genes genes
 ############################################################
 
 max_feature_genes <- 30
@@ -1050,8 +1050,7 @@ feature_selectors <- list(
   }
 )
 
-## 如果候选基因数量不太多，也可以启用 StepCox 作为特征筛选。
-## 这里设置不超过 80 个基因才运行。
+## Enable StepCox backward selection only if total candidate genes ≤ 80
 if (length(pre_var) <= 80) {
   feature_selectors$StepCox_backward <- function() {
     select_stepcox_backward(est_dd, pre_var, max_genes_for_step = 80)
@@ -1060,7 +1059,7 @@ if (length(pre_var) <= 80) {
 
 model_builders <- list(
   ############################################################
-  ## 修改 3：Cox / StepCox 只允许筛选后少量基因进入
+  ## Modification 3: Cox / StepCox only accept pre-filtered small gene sets
   ############################################################
   
   Cox = function(rid) {
@@ -1104,7 +1103,7 @@ model_builders <- list(
   }
 )
 
-## Add Elastic Net models
+## Add Elastic Net models with alpha ranging 0.1 ~ 0.9
 for (a in seq(0.1, 0.9, by = 0.1)) {
   model_builders[[paste0("Enet_alpha_", a)]] <- local({
     alpha_value <- a
@@ -1121,19 +1120,19 @@ for (a in seq(0.1, 0.9, by = 0.1)) {
 }
 
 ############################################################
-## 9. Run all combinations
+## 9. Execute All Feature Selection + Model Combinations
 ############################################################
 
 ############################################################
-## 修改 4：重新运行所有模型组合
-## 核心逻辑：
-## 1. All + Cox 直接跳过
-## 2. All + StepCox 直接跳过
-## 3. 只有 RSF/Lasso/CoxBoost 等筛基因后，才允许 Cox/StepCox
+## Modification 4: Run all model combinations with filtering rules
+## Core logic:
+## 1. All + Cox directly skipped
+## 2. All + StepCox directly skipped
+## 3. Cox/StepCox only allowed after RSF/Lasso/CoxBoost feature filtering
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 6: Running all model combinations\n")
+cat("Step 6: Execute all model combinations\n")
 cat("==============================\n")
 
 result <- data.frame()
@@ -1146,12 +1145,12 @@ event_num <- sum(est_dd$OS == 1, na.rm = TRUE)
 for (fs_name in names(feature_selectors)) {
   
   cat("\n###################################################\n")
-  cat("Feature selection:", fs_name, "\n")
+  cat("Feature selection pipeline:", fs_name, "\n")
   cat("###################################################\n")
   
   rid <- safe_model(
     paste0("FeatureSelect_", fs_name),
-    feature_selectors[[fs_name]]()
+    feature_selectors[fs_name]]()
   )
   
   if (is.null(rid)) next
@@ -1160,11 +1159,11 @@ for (fs_name in names(feature_selectors)) {
   rid <- unique(rid)
   
   if (length(rid) < 2) {
-    cat("Selected gene number < 2. Skip:", fs_name, "\n")
+    cat("Skipping pipeline", fs_name, ": fewer than 2 selected genes\n")
     next
   }
   
-  cat("Selected gene number:", length(rid), "\n")
+  cat("Number of selected genes:", length(rid), "\n")
   
   gene_store[[paste0("FeatureSelect_", fs_name)]] <- rid
   
@@ -1182,34 +1181,33 @@ for (fs_name in names(feature_selectors)) {
     }
     
     ################################################
-    ## 修改 4.1：
-    ## All 不算真正的特征筛选。
-    ## 所以 All + Cox 和 All + StepCox 直接跳过。
+    ## Modification 4.1:
+    ## "All" is not a formal feature selection method.
+    ## Skip All + Cox and All + StepCox entirely.
     ################################################
     
     if (fs_name == "All" &&
         model_name %in% c("Cox", "StepCox_backward")) {
       
       cat(
-        "Skip:", full_model_name,
-        "| Reason: Cox/StepCox must be performed after feature selection, not All genes.\n"
+        "Skip model:", full_model_name,
+        "| Reason: Cox/StepCox requires prior feature filtering, cannot use full gene set directly.\n"
       )
       
       next
     }
     
     ################################################
-    ## 修改 4.2：
-    ## 即使经过筛选，如果基因数仍然太多，
-    ## Cox 和 StepCox 也跳过。
+    ## Modification 4.2:
+    ## Skip Cox/StepCox even after filtering if gene count exceeds threshold
     ################################################
     
     if (model_name %in% c("Cox", "StepCox_backward") &&
         length(rid) > max_genes_for_cox_models) {
       
       cat(
-        "Skip:", full_model_name,
-        "| selected gene number =", length(rid),
+        "Skip model:", full_model_name,
+        "| Selected gene count =", length(rid),
         "> max_genes_for_cox_models =", max_genes_for_cox_models,
         "\n"
       )
@@ -1218,17 +1216,16 @@ for (fs_name in names(feature_selectors)) {
     }
     
     ################################################
-    ## 修改 4.3：
-    ## 如果变量数相对事件数仍然偏多，
-    ## Cox 和 StepCox 也跳过。
+    ## Modification 4.3:
+    ## Skip Cox/StepCox if variable count is too high relative to event count
     ################################################
     
     if (model_name %in% c("Cox", "StepCox_backward") &&
         length(rid) >= floor(event_num / 2)) {
       
       cat(
-        "Skip:", full_model_name,
-        "| selected gene number =", length(rid),
+        "Skip model:", full_model_name,
+        "| Selected gene count =", length(rid),
         ">= event_num/2 =", floor(event_num / 2),
         "\n"
       )
@@ -1251,12 +1248,12 @@ for (fs_name in names(feature_selectors)) {
     
     model_store[[full_model_name]] <- fit_obj
     
-    cat("Finished:", full_model_name, "\n")
+    cat("Completed model:", full_model_name, "\n")
   }
 }
 
 if (nrow(result) == 0) {
-  stop("所有模型均运行失败，请检查数据和参数。")
+  stop("All model runs failed. Please check input data and parameters.")
 }
 
 write.csv(
@@ -1273,7 +1270,7 @@ save(
 )
 
 if (nrow(result) == 0) {
-  stop("所有模型均运行失败，请检查数据和包。")
+  stop("All model runs failed. Please check packages and input data.")
 }
 
 write.csv(
@@ -1290,11 +1287,11 @@ save(
 )
 
 ############################################################
-## 10. Summarize C-index
+## 10. Summarize C-index Results
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 7: Summarizing C-index\n")
+cat("Step 7: Summarize C-index performance\n")
 cat("==============================\n")
 
 result2 <- result %>%
@@ -1331,23 +1328,15 @@ write.csv(
   row.names = FALSE
 )
 
-cat("\nTop 20 models by GSE165656 C-index:\n")
+cat("\nTop 20 models ranked by GSE165656 C-index:\n")
 print(head(cindex_wide, 20))
 
 ############################################################
-## 11. C-index heatmap
+## 11. Generate C-index Heatmap
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 8: Plotting C-index heatmap\n")
-cat("==============================\n")
-
-############################################################
-## 11. C-index heatmap
-############################################################
-
-cat("\n==============================\n")
-cat("Step 8: Plotting C-index heatmap\n")
+cat("Step 8: Plot C-index heatmap\n")
 cat("==============================\n")
 
 cindex_plot <- cindex_wide[
@@ -1355,47 +1344,39 @@ cindex_plot <- cindex_wide[
 ]
 
 ############################################################
-## 11. C-index heatmap
-## 修改：
-## 1. 新增 Average_Cindex = mean(TCGA, GSE165656)
-## 2. 按 Average_Cindex 从高到低排序
-## 3. 去除相同模型组合，如 RSF + RSF、Lasso + Lasso 等
-## 4. 使用更适合 SCI 的配色
+## Heatmap modification details:
+## 1. Add Average_Cindex = mean(TCGA C-index, GSE165656 C-index)
+## 2. Sort models descending by Average_Cindex
+## 3. Remove redundant self-matching combinations (e.g. RSF + RSF, Lasso + Lasso)
+## 4. Apply SCI journal-friendly color palette
 ############################################################
 
-cat("\n==============================\n")
-cat("Step 8: Plotting C-index heatmap\n")
-cat("==============================\n")
-
-cindex_plot <- cindex_wide[
-  !is.na(cindex_wide$TCGA) & !is.na(cindex_wide$GSE165656),
-]
 cindex_plot <- subset(
   cindex_plot,
   GSE165656 >= 0.50
 )
-## 去除相同模型组合，例如 RSF + RSF, Lasso + Lasso, CoxBoost + CoxBoost
+## Remove identical feature-selection + model pairs, e.g. RSF + RSF
 same_model_rows <- grepl("^(.+) \\+ \\1$", cindex_plot$Model)
 
 if (any(same_model_rows)) {
-  cat("Remove same-model combinations:\n")
+  cat("Removing redundant self-matching model combinations:\n")
   print(cindex_plot$Model[same_model_rows])
 }
 
 cindex_plot <- cindex_plot[!same_model_rows, ]
 
-## 新增平均 C-index
+## Calculate average C-index across two cohorts
 cindex_plot$Average_Cindex <- rowMeans(
   cindex_plot[, c("TCGA", "GSE165656"), drop = FALSE],
   na.rm = TRUE
 )
 
-## 按平均 C-index 从高到低排序
+## Sort models from highest to lowest average C-index
 cindex_plot <- cindex_plot[
   order(cindex_plot$Average_Cindex, decreasing = TRUE),
 ]
 
-## 保存用于画图的数据
+## Export heatmap source data
 write.csv(
   cindex_plot,
   file.path(outdata_dir, "1_Cindex_heatmap_data_sorted_by_average.csv"),
@@ -1410,15 +1391,15 @@ if (nrow(cindex_plot) > 1) {
   
   rownames(dt) <- cindex_plot$Model
   
-  ## 列名美化
+  ## Clean column labels for figure
   colnames(dt) <- c("TCGA", "GSE165656", "Average")
   
-  ## SCI风格配色：蓝-白-红，低值蓝，高值红
+  ## SCI standard color scheme: blue-white-red (low value blue, high value red)
   heat_cols <- colorRampPalette(
     c("#3953A4", "#FFFFFF", "#ED2123")
   )(100)
   
-  ## 根据模型数量自动调整高度
+  ## Dynamically adjust figure height based on total model count
   plot_height <- max(6, nrow(dt) * 0.20)
   
   pdf(
@@ -1444,29 +1425,29 @@ if (nrow(cindex_plot) > 1) {
       max(dt, na.rm = TRUE),
       length.out = 101
     ),
-    main = "C-index of Survival Models"
+    main = "C-index of Survival Prediction Models"
   )
   
   dev.off()
 }
 
 ############################################################
-## 12. Select best model
+## 12. Identify Optimal Model
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 9: Selecting best model\n")
+cat("Step 9: Select best-performing model\n")
 cat("==============================\n")
 
 valid_rank <- cindex_wide[!is.na(cindex_wide$GSE165656), ]
 
 if (nrow(valid_rank) == 0) {
-  stop("没有任何模型得到 GSE165656 C-index。")
+  stop("No valid model produced calculable GSE165656 C-index.")
 }
 
 best_model_name <- valid_rank$Model[1]
 
-cat("Best model selected by GSE165656 C-index:", best_model_name, "\n")
+cat("Best model selected based on external GSE165656 C-index:", best_model_name, "\n")
 
 writeLines(
   best_model_name,
@@ -1476,7 +1457,7 @@ writeLines(
 best_obj <- model_store[[best_model_name]]
 
 if (is.null(best_obj)) {
-  stop("无法从 model_store 中找到最佳模型对象。")
+  stop("Failed to retrieve best model object from stored model list.")
 }
 
 save(
@@ -1491,11 +1472,11 @@ write_tsv(
 )
 
 ############################################################
-## 13. Save best model coefficients if available
+## 13. Export Model Coefficients (If Supported)
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 10: Saving coefficients if available\n")
+cat("Step 10: Export model coefficients where available\n")
 cat("==============================\n")
 
 coef_df <- NULL
@@ -1574,19 +1555,19 @@ if (!is.null(coef_df) && nrow(coef_df) > 0) {
     file.path(outdata_dir, "2_best_model_coefficients.txt")
   )
   
-  cat("Coefficient file saved.\n")
+  cat("Coefficient table exported successfully.\n")
   
 } else {
   
-  cat("Best model has no simple linear coefficients or coefficients unavailable.\n")
+  cat("Best model type does not output interpretable linear coefficients.\n")
 }
 
 ############################################################
-## 14. Best model riskScore and risk group
+## 14. Generate Risk Score & Risk Group Stratification
 ############################################################
 
 cat("\n==============================\n")
-cat("Step 11: Risk score and risk groups\n")
+cat("Step 11: Calculate risk scores and stratify risk groups\n")
 cat("==============================\n")
 
 train_rs <- best_obj$rs$TCGA
@@ -1610,175 +1591,7 @@ valid_df <- data.frame(
   stringsAsFactors = FALSE
 )
 
-## cutoff 只能来自训练集
+## Risk cutoff derived exclusively from training cohort median
 risk_cutoff <- median(train_df$riskScore, na.rm = TRUE)
 
-train_df$risk_group <- ifelse(train_df$riskScore >= risk_cutoff, "High", "Low")
-valid_df$risk_group <- ifelse(valid_df$riskScore >= risk_cutoff, "High", "Low")
-
-train_df$risk_group <- factor(train_df$risk_group, levels = c("Low", "High"))
-valid_df$risk_group <- factor(valid_df$risk_group, levels = c("Low", "High"))
-
-cat("Risk cutoff from TCGA median:", risk_cutoff, "\n")
-
-cat("\nTCGA risk groups:\n")
-print(table(train_df$risk_group))
-
-cat("\nGSE165656 risk groups:\n")
-print(table(valid_df$risk_group))
-
-write_tsv(
-  train_df,
-  file.path(outdata_dir, "3_best_model_riskScore_TCGA.txt")
-)
-
-write_tsv(
-  valid_df,
-  file.path(outdata_dir, "3_best_model_riskScore_GSE165656.txt")
-)
-
-writeLines(
-  as.character(risk_cutoff),
-  file.path(outdata_dir, "3_best_model_cutoff_from_TCGA_median.txt")
-)
-
-############################################################
-## 15. KM plotting function
-############################################################
-
-plot_km_best <- function(dat, title, outfile) {
-  
-  dat <- dat %>%
-    mutate(
-      OS.month = OS.time / 30,
-      risk_group = factor(risk_group, levels = c("Low", "High"))
-    )
-  
-  if (length(unique(dat$risk_group)) < 2) {
-    cat("Only one risk group in ", title, ". Skip KM plot.\n")
-    return(NULL)
-  }
-  
-  fit <- survfit(Surv(OS.month, OS) ~ risk_group, data = dat)
-  
-  cox_fit <- tryCatch(
-    coxph(Surv(OS.month, OS) ~ risk_group, data = dat),
-    error = function(e) NULL
-  )
-  
-  hr_label <- ""
-  
-  if (!is.null(cox_fit)) {
-    
-    hr <- round(exp(coef(cox_fit)), 2)
-    ci <- round(exp(confint(cox_fit)), 2)
-    pcox <- signif(summary(cox_fit)$waldtest["pvalue"], 3)
-    
-    hr_label <- paste0(
-      "HR = ", hr,
-      " (", ci[1], "-", ci[2], ")\n",
-      "Cox p = ", pcox
-    )
-  }
-  
-  pub_theme <- theme_bw() +
-    theme(
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.border = element_rect(colour = "black", linewidth = 0.8),
-      plot.title = element_text(hjust = 0.5, size = 13),
-      axis.title = element_text(size = 12),
-      axis.text = element_text(size = 10, colour = "black"),
-      legend.text = element_text(size = 10),
-      legend.position = c(0.82, 0.85),
-      legend.background = element_blank()
-    )
-  
-  p <- ggsurvplot(
-    fit,
-    data = dat,
-    title = title,
-    xlab = "Time months",
-    ylab = "Survival probability",
-    risk.table = TRUE,
-    risk.table.y.text = FALSE,
-    pval = TRUE,
-    pval.size = 4.5,
-    conf.int = FALSE,
-    palette = c("#2E86AB", "#E63946"),
-    risk.table.height = 0.22,
-    legend.title = "",
-    legend.labs = c("Low risk", "High risk"),
-    ggtheme = pub_theme,
-    surv.median.line = "hv"
-  )
-  
-  if (hr_label != "") {
-    p$plot <- p$plot +
-      annotate(
-        "text",
-        x = max(dat$OS.month, na.rm = TRUE) * 0.55,
-        y = 0.20,
-        label = hr_label,
-        size = 4
-      )
-  }
-  
-  pdf(outfile, width = 8, height = 6)
-  print(p)
-  dev.off()
-  
-  return(p)
-}
-
-############################################################
-## 16. Plot KM curves
-############################################################
-
-cat("\n==============================\n")
-cat("Step 12: Plotting KM curves\n")
-cat("==============================\n")
-
-plot_km_best(
-  train_df,
-  paste0("Overall survival in TCGA training cohort\n", best_model_name),
-  file.path(outplot_dir, "2_best_model_TCGA_KM.pdf")
-)
-
-plot_km_best(
-  valid_df,
-  paste0("Overall survival in GSE165656 validation cohort\n", best_model_name),
-  file.path(outplot_dir, "2_best_model_GSE165656_KM.pdf")
-)
-
-############################################################
-## 17. Save final summary
-############################################################
-
-cat("\n==============================\n")
-cat("Step 13: Final summary\n")
-cat("==============================\n")
-
-best_cindex <- cindex_wide[cindex_wide$Model == best_model_name, ]
-
-summary_df <- data.frame(
-  Best_Model = best_model_name,
-  TCGA_Cindex = best_cindex$TCGA,
-  GSE165656_Cindex = best_cindex$GSE165656,
-  Mean_Cindex = best_cindex$Mean_Cindex,
-  Cutoff_from_TCGA_median = risk_cutoff,
-  Gene_number = length(best_obj$genes),
-  stringsAsFactors = FALSE
-)
-
-write.csv(
-  summary_df,
-  file.path(outdata_dir, "4_final_best_model_summary.csv"),
-  row.names = FALSE
-)
-
-print(summary_df)
-
-cat("\nAll analyses completed successfully.\n")
-cat("Output data directory:", outdata_dir, "\n")
-cat("Output plot directory:", outplot_dir, "\n")
+train_df$risk_group <- ifelse(train_df$riskScore >= risk_cutoff
