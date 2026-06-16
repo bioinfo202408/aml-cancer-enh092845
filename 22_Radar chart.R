@@ -1,17 +1,17 @@
-# 参考：https://mp.weixin.qq.com/s?__biz=MzU5NjE2ODU0OQ==&mid=2247484972&idx=1&sn=dfa146cdecc9a1158a40e4c282937429&scene=21&poc_token=HHNeIWqjXu-ab4ymdTs5MrnF-8oNBt9tiiRw-uF4
+# Reference: https://mp.weixin.qq.com/s?__biz=MzU5NjE2ODU0OQ==&mid=2247484972&idx=1&sn=dfa146cdecc9a1158a40e4c282937429&scene=21&poc_token=HHNeIWqjXu-ab4ymdTs5MrnF-8oNBt9tiiRw-uF4
 
 rm(list = ls())
 gc()
 
-# 工作路径
+# Working directory
 setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-cat("【初始化】当前工作路径：", getwd(), "\n\n")
+cat("[Initialization] Current working directory: ", getwd(), "\n\n")
 
-# 创建输出目录
-out_dir <- "./22_雷达图/"
+# Create output directory
+out_dir <- "./22_RadarChart/"
 dir.create(out_dir, showWarnings = F, recursive = T)
 
-# 加载包
+# Load packages
 library(ggradar)
 library(dplyr)
 library(scales)
@@ -20,20 +20,20 @@ library(plotthis)
 library(ggplot2)
 library(tidyr)
 
-# 读入原始结果
-df_raw <- read.csv("./21_SuperLearner/Outdata/0_最佳元模型选择_MetaLearner_Result.csv")
+# Import raw results
+df_raw <- read.csv("./21_SuperLearner/Outdata/0_Optimal_MetaLearner_Selection_MetaLearner_Result.csv")
 colnames(df_raw) <- c(
   "Meta_Learner", "Train_AUC", "Train_Acc", "Train_Sen", "Train_Spe", "Train_Pre", "Train_F1", "Train_BACC", "Train_Thres",
   "Test_AUC", "Test_Acc", "Test_Sen", "Test_Spe", "Test_Pre", "Test_F1", "Test_BACC", "Test_Thres",
   "Val_AUC", "Val_Acc", "Val_Sen", "Val_Spe", "Val_Pre", "Val_F1", "Val_BACC", "Val_Thres"
 )
 
-# 筛选绘图指标，剔除阈值列
+# Filter plotting metrics, remove threshold columns
 radar_data <- df_raw %>%
   select(Meta_Learner, contains(c("Train_","Val_")), -contains("Thres"))
 colnames(radar_data)[1] <- "group"
 
-## 1、原始数据ggradar总图（保持原样输出不变）
+## 1. Full radar plot with raw data (output style unchanged)
 p1 <- ggradar(
   plot.data = radar_data,
   base.size = 12,
@@ -65,9 +65,9 @@ p1 <- ggradar(
   fill = TRUE, fill.alpha = 0.18,
   plot.title = "SuperLearner Meta-Learner Performance Radar"
 )
-ggsave("./22_雷达图/1_最佳元模型选择_SuperLearner_Nature_Radar_ggradar.pdf",p1,width=10,height=7,dpi=300)
+ggsave("./22_RadarChart/1_Optimal_MetaLearner_Selection_SuperLearner_Nature_Radar_ggradar.pdf",p1,width=10,height=7,dpi=300)
 
-## 2、分面蜘蛛图：log1p=ln(x+1)对数变换
+## 2. Faceted spider plot: log1p = ln(x+1) logarithmic transformation
 radar_long <- pivot_longer(
   data = radar_data,
   cols = -group,
@@ -76,14 +76,14 @@ radar_long <- pivot_longer(
 )
 colnames(radar_long) <- c("Meta_Learner","Index","Score_raw")
 
-# 对数变换：y = log1p(x)=ln(x+1)
+# Logarithmic transformation: y = log1p(x) = ln(x+1)
 radar_long <- radar_long %>%
   mutate(
-    Score_log = log1p(Score_raw), # 对数拉伸高分细微差异
-    Lab_text = round(Score_raw,3)  # 标签保留原始真实数值
+    Score_log = log1p(Score_raw), # Log transformation to expand subtle differences of high scores
+    Lab_text = round(Score_raw,3)  # Label retains original raw values
   )
 
-# 固定配色
+# Fixed color palette
 color_vec <- c(
   "method.NNLS"     = "#E63946",
   "method.NNLS2"    = "#F77F00",
@@ -92,19 +92,19 @@ color_vec <- c(
   "method.CC_nloglik"="#118AB2",
   "method.AUC"      = "#073B4C"
 )
-# 图片6色：灰、深绿、天蓝、橙、紫、浅粉
+# Six custom colors: Gray, Dark Green, Sky Blue, Orange, Purple, Light Pink
 color_vec <- c(
-  "method.NNLS"     = "#A0A0A4",   # 灰色
-  "method.NNLS2"    = "#008000",   # 深绿色
-  "method.NNloglik" = "#57A4FD",   # 亮蓝色
-  "method.CC_LS"    = "#FF6000",   # 橙红色
-  "method.CC_nloglik"="#AD07E3",   # 紫色
-  "method.AUC"      = "#F7ABE8"    # 浅粉色
+  "method.NNLS"     = "#A0A0A4",   # Gray
+  "method.NNLS2"    = "#008000",   # Dark Green
+  "method.NNloglik" = "#57A4FD",   # Bright Sky Blue
+  "method.CC_LS"    = "#FF6000",   # Orange-Red
+  "method.CC_nloglik"="#AD07E3",   # Purple
+  "method.AUC"      = "#F7ABE8"    # Light Pink
 )
 
 
 
-# 绘制基础蜘蛛图，径向使用对数变换后数据
+# Draw base spider plot with log-transformed radial values
 spider_base <- SpiderPlot(
   data = radar_long,
   x = "Index",
@@ -125,7 +125,7 @@ spider_base <- SpiderPlot(
   theme_args = list(plot.title = element_text(hjust=0.5,size=14))
 )
 
-# 顶点外侧添加原始数值标签，向外偏移0.03
+# Add raw value labels outside vertices with 0.03 outward offset
 final_spider <- spider_base +
   geom_text(
     aes(label = Lab_text, y = Score_log + 0.03),
@@ -133,13 +133,11 @@ final_spider <- spider_base +
     check_overlap = TRUE
   )
 
-# 导出PDF
+# Export PDF file
 ggsave(
-  filename = paste0(out_dir,"2_log1p对数变换_分面异色_原始数值标注_Spider2.pdf"),
+  filename = paste0(out_dir,"2_log1p_logarithmic_transform_faceted_multiColor_rawValue_labeled_Spider2.pdf"),
   plot = final_spider,
   width = 15,
   height = 8,
   dpi = 300
 )
-
-把中文都换成英文
