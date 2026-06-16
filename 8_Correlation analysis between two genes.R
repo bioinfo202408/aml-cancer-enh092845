@@ -1,53 +1,53 @@
-# 参考：https://mp.weixin.qq.com/s/MXKTxL0YYrj5gwvvG1OdEA
+# Reference: https://mp.weixin.qq.com/s/MXKTxL0YYrj5gwvvG1OdEA
 
-# 清空环境并加载必要的包
+# Clear environment and load required packages
 rm(list = ls())
-gc() #清理内存中不再使用的对象
+gc() # Clean unused objects in memory
 
-# 设置工作路径
-setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-cat("【初始化】当前工作路径：", getwd(), "\n\n")
+# Set working directory
+setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.Plot_Code/")
+cat("[Initialization] Current working directory: ", getwd(), "\n\n")
 
-#查看临时目录
+# Check temporary directory
 Sys.getenv("TMPDIR") 
 
-dir.create("./8_两个基因间相关性分析/")
+dir.create("./8_Correlation_Analysis_Between_Two_Genes/")
 
 library(ggplot2)
 library(ggpubr)
 library(ggprism)
 library(data.table)
-library(psych)  # 用于corr.test，可同时输出相关系数和p值
-library(dplyr)  # 用于数据整理
-library(WGCNA)       # 用于corAndPvalue替代corr.test
-library(foreach)     # 并行计算核心包
-library(doParallel)  # 开启多核心
-# 开启10个计算核心（根据服务器实际核心数调整，若不足10则自动用最大可用核心）
+library(psych)  # For corr.test, outputs correlation coefficient and p-value simultaneously
+library(dplyr)  # For data wrangling
+library(WGCNA)       # corAndPvalue as alternative to corr.test
+library(foreach)     # Core package for parallel computing
+library(doParallel)  # Enable multi-threading
+# Activate 10 computing cores (adjust based on actual server cores; auto uses max available if less than 10)
 cl <- makeCluster(10)
 registerDoParallel(cl)
 
-### 去批次后数据
+### Batch-corrected expression data
 # mRNA_expr <- fread("../Outdata/5.all_data_harmony/combat_all_mRNA.csv")
 # miRNA_expr <- fread("../Outdata/5.all_data_harmony/combat_all_miRNA.csv")
 # eRNA_expr <- fread("../Outdata/5.all_data_harmony/combat_all_eRNA.csv")
 # lncRNA_expr <- fread("../Outdata/5.all_data_harmony/combat_all_lncRNA.csv")
-# #lncRNA ID 转换
-# source("../0.gene_id_to_gene_name转换函数.R")
+# # lncRNA ID conversion
+# source("../0.gene_id_to_gene_name_conversion_function.R")
 # lncRNA_expr <- convert_gene_id_to_name(
-#   data = lncRNA_expr,  #只需要修改这里即可:lncRNA第一列是基因名
+#   data = lncRNA_expr,  # Only modify this line: first column of lncRNA is gene name
 #   mapping_file_path = "/home/weili/Project/rawdata/TCGA/geneid_to_genename/lnc_genecode_gene_id_name_mapping1.txt"
 # )
 # colnames(lncRNA_expr)[1] <- "V1"
-# #合并
+# # Merge all RNA types
 # allRNA_expr <- rbind(mRNA_expr,miRNA_expr,eRNA_expr,lncRNA_expr)
 # allRNA_expr <- as.data.frame(allRNA_expr)
-# #去重复
+# # Remove duplicated genes
 # allRNA_expr <- allRNA_expr[!duplicated(allRNA_expr$V1), ]
 # rownames(allRNA_expr) <- allRNA_expr$V1
 # head(rownames(allRNA_expr))
 # 
 # write.csv(allRNA_expr,"../Outdata/5.all_data_harmony/combat_allRNA_20260520.csv")
-#### 去批次后数据
+#### Load batch-corrected combined RNA expression matrix
 allRNA_expr <- fread("../Outdata/5.all_data_harmony/combat_allRNA_20260520.csv")
 group_info <- read.csv("../Outdata/5.all_data_harmony/5.0_all_expr_group_batch_info.csv")
 tumor_sample <- rownames(group_info[group_info$Group == 1,])
@@ -63,40 +63,40 @@ allRNA_expr <- tumor_expr
 
 
 
-# #### TCGA只有AML数，有所有mRNA
+# #### TCGA-LAML mRNA dataset containing all mRNA genes
 # allRNA_expr <- fread("/home/weili/Project/multi_omic/Pathformer/data_TCGA/1.raw_data/TCGA-LAML/TCGA-LAML.mRNA.csv")
-# # gene_id转换为gene_name
-# # 安装并加载注释包（第一次用需要安装）
+# # Convert gene ID to gene symbol
+# # Install and load annotation package (install on first use)
 # if (!require("biomaRt")) {
 #   if (!require("BiocManager")) install.packages("BiocManager")
 #   BiocManager::install("biomaRt")
 # }
 # library(biomaRt)
-# # 连接 Ensembl 数据库（人 hg38）
+# # Connect to Ensembl database (human hg38)
 # mart <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-# # 你的 ID 列表（直接用你自己的 allRNA_expr$V1）
+# # Input ID list (directly use allRNA_expr$V1)
 # ensembl_ids_with_version <- allRNA_expr$V1
-# # 去掉版本号（.后面的数字）
+# # Remove version suffix (numbers after dot)
 # ensembl_ids <- gsub("\\..*", "", ensembl_ids_with_version)
-# # 批量转换 ID → gene_name
+# # Batch convert Ensembl ID → gene symbol
 # annot <- getBM(
 #   attributes = c("ensembl_gene_id", "external_gene_name"),
 #   filters = "ensembl_gene_id",
 #   values = ensembl_ids,
 #   mart = mart
 # )
-# # 把基因名合并回你的数据框
+# # Merge gene symbols back to expression dataframe
 # allRNA_expr$gene_name <- annot$external_gene_name[match(ensembl_ids, annot$ensembl_gene_id)]
-# # 看结果
+# # Check output
 # head(allRNA_expr[, c("V1", "gene_name")])
 # allRNA_expr <- allRNA_expr[!duplicated(allRNA_expr$gene_name), ]
-# # 先去掉 gene_name 为 NA 的行（这是报错根源）
+# # Remove rows with NA gene symbols (root cause of errors)
 # allRNA_expr <- allRNA_expr[!is.na(allRNA_expr$gene_name), ]
-# # 再去重（确保没有重复基因名）
+# # Deduplicate again to eliminate duplicate gene symbols
 # allRNA_expr <- allRNA_expr[!duplicated(allRNA_expr$gene_name), ]
-# # 最后设置行名（现在绝对不会报错）
+# # Assign row names (no error guaranteed)
 # rownames(allRNA_expr) <- allRNA_expr$gene_name
-# # 查看结果
+# # Preview row names
 # head(rownames(allRNA_expr))
 # 
 # "CLEC11A" %in% rownames(allRNA_expr)
@@ -114,11 +114,11 @@ allRNA_expr <- tumor_expr
 
 
 # 
-# # 新下载的包含所有基因的表达矩阵:GSE137851
+# # Combined expression matrix from GSE137851 containing all RNA types
 # allRNA_expr <- fread("../../mapping/AML_100_GSE137851/3.combined_all_RNA_common_cols.csv")
-# # 最后设置行名（现在绝对不会报错）
+# # Assign row names (no error guaranteed)
 # rownames(allRNA_expr) <- allRNA_expr$gene_name
-# # 查看结果
+# # Preview row names
 # head(rownames(allRNA_expr))
 # 
 # "Enh092845" %in% rownames(allRNA_expr)
@@ -134,8 +134,8 @@ allRNA_expr <- tumor_expr
 
 
 
-### 开始绘图
-# ===================== 批量相关性绘图 =====================
+### Start plotting
+# ===================== Batch Correlation Scatter Plot Pipeline =====================
 library(ggplot2)
 library(ggpubr)
 library(ggside)
@@ -143,33 +143,33 @@ library(tidyverse)
 library(ggprism)
 
 
-# 基因列表
+# Gene list
 # genes <- c("CLEC11A", "LRRC4B", "SYT3", "C19orf81",
 #            "SHANK1", "GPR32", "SMIM47", "ACP4")
 genes <- c("CLEC11A")
 query_gene <- "Enh092845"
 
-# 强制所有表达量大于0
-# ===================== 修复版：强制 allRNA_expr 全 > 0 =====================
-# 只对数值列处理（跳过基因名字符列）
+# Force all expression values greater than 0
+# ===================== Fixed script: Ensure all values in allRNA_expr > 0 =====================
+# Only process numeric columns (skip character gene ID columns)
 numeric_cols <- sapply(allRNA_expr, is.numeric)
 if(sum(numeric_cols) > 0){
-  # NA → 0
+  # Replace NA with 0
   allRNA_expr[, (names(allRNA_expr)[numeric_cols]) := lapply(.SD, function(x) {
     x[is.na(x)] <- 0
     x
   }), .SDcols = numeric_cols]
   
-  # 计算全局最小值（只算数值列）
+  # Calculate global minimum value across numeric columns
   min_val <- min(as.matrix(allRNA_expr[, ..numeric_cols]), na.rm = TRUE)
   
-  # 整体平移，让所有值 > 0
+  # Global shift to make all values positive
   if(min_val <= 0) {
     shift <- abs(min_val) + 0.001
     allRNA_expr[, (names(allRNA_expr)[numeric_cols]) := lapply(.SD, function(x) x + shift), .SDcols = numeric_cols]
   }
   
-  # 兜底：所有 <=0 的值强制变成 0.001
+  # Fallback: force all values ≤ 0 to 0.001
   allRNA_expr[, (names(allRNA_expr)[numeric_cols]) := lapply(.SD, function(x) {
     x[x <= 0] <- 0.001
     x
@@ -177,13 +177,13 @@ if(sum(numeric_cols) > 0){
 }
 # ==========================================================================
 
-# 数据转换
+# Data transformation
 expr_df <- as.data.frame(allRNA_expr)
 expr_df <- log(expr_df+1)
 rownames(expr_df) <- rownames(allRNA_expr)
 
-# 基因存在检查
-cat("======= 基因存在检查 =======\n")
+# Gene existence validation
+cat("======= Gene Existence Check =======\n")
 cat(query_gene, ": ", query_gene %in% rownames(expr_df), "\n")
 for(g in genes){ cat(g, ": ", g %in% rownames(expr_df), "\n") }
 
@@ -191,10 +191,10 @@ genes_exist <- genes[genes %in% rownames(expr_df)]
 colors <- c("#1f77b4","#ff7f0e","#2ca02c","#d62728",
             "#9467bd","#8c564b","#e377c2","#7f7f7f")
 
-if(!dir.exists("./8_两个基因间相关性分析")) dir.create("./8_两个基因间相关性分析", recursive=T)
+if(!dir.exists("./8_Correlation_Analysis_Between_Two_Genes")) dir.create("./8_Correlation_Analysis_Between_Two_Genes", recursive=T)
 result_df <- data.frame()
 
-# 批量循环（零警告版）
+# Batch loop with zero warning handling
 for(i in seq_along(genes_exist)){
   gene <- genes_exist[i]
   col  <- colors[i]
@@ -220,7 +220,7 @@ for(i in seq_along(genes_exist)){
   
   result_df <- rbind(result_df, data.frame(gene2=gene, pearson_r=r, p_value=p))
   
-  pdf(paste0("./8_两个基因间相关性分析/",query_gene,"_",gene,".pdf"), width=6.5, height=5.5)
+  pdf(paste0("./8_Correlation_Analysis_Between_Two_Genes/",query_gene,"_",gene,".pdf"), width=6.5, height=5.5)
   
   p <- ggplot(data, aes(x=.data[[query_gene]], y=.data[[gene]])) +
     geom_point(color=col, size=3.2) +
@@ -230,7 +230,7 @@ for(i in seq_along(genes_exist)){
              hjust=0, size=6) +
     labs(x=query_gene, y=gene) +
     
-    # 上方分布密度图
+    # Top marginal density histogram
     geom_xsidehistogram(
       aes(y = after_stat(density)),
       binwidth = 0.05, fill = "#1f77b4"
@@ -241,7 +241,7 @@ for(i in seq_along(genes_exist)){
     ) +
     scale_xsidey_continuous(labels = NULL)+
     
-    # 右侧分布密度图
+    # Right marginal density histogram
     geom_ysidehistogram(
       aes(x = after_stat(density)),
       binwidth = 0.05, fill = "#1f77b4"
@@ -269,5 +269,5 @@ for(i in seq_along(genes_exist)){
   message(gene, "  → r = ", r, "  p = ", p_label)
 }
 
-write.csv(result_df, "./8_两个基因间相关性分析/Enh092845_相关性汇总2.csv", row.names=F)
-message("\n🎉 全部完成！")
+write.csv(result_df, "./8_Correlation_Analysis_Between_Two_Genes/Enh092845_correlation_summary2.csv", row.names=F)
+message("\n🎉 All analysis finished!")
