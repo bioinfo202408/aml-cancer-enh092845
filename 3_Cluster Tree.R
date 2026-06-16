@@ -5,7 +5,7 @@ rm(list = ls())
 gc() # Clean unused objects in memory
 
 # Set working directory
-setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
+setwd("/home/weili/Project/AML/human/AML_combined_analyse/")
 cat("[Initialization] Current working directory: ", getwd(), "\n\n")
 
 source("/home/weili/Project/AML/human/AML_combined_analyse//0.Enviroment.R")
