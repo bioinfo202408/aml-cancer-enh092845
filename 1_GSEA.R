@@ -1,13 +1,13 @@
-# 清空环境并加载必要的包
+# Clear environment and load required packages
 rm(list = ls())
 gc()
 
-# 设置工作路径
+# Set working directory
 setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-cat("【初始化】当前工作路径：", getwd(), "\n\n")
+cat("[Initialization] Current working directory: ", getwd(), "\n\n")
 
-### GSEA富集分析
-# 加载包
+### GSEA enrichment analysis
+# Load packages
 library(dplyr)
 library(clusterProfiler)
 library(org.Hs.eg.db)
@@ -18,15 +18,15 @@ library(cowplot)
 
 dir.create("./画图代码/1_GSEA/")
 
-# ======================1.读取logFC排序文件  ======================
+# ======================1. Read logFC sorted file  ======================
 file_name <- "../Outdata/26_虚拟敲除/GMP-LIKE-IRF1基因虚拟敲除显著相关基因.csv"
 
-# 读取差异结果
+# Read differential expression results
 ko_res <- read.csv(file_name, stringsAsFactors = FALSE)
-ko_res <- ko_res[-1,] # 去除自己那行
+ko_res <- ko_res[-1,] # Remove self-matching row
 
 
-# 基因名转换
+# Gene symbol to Entrez ID conversion
 gene_map <- bitr(
   geneID = ko_res$gene,
   fromType = "SYMBOL",
@@ -35,21 +35,21 @@ gene_map <- bitr(
 )
 ko_res <- inner_join(ko_res, gene_map, by = c("gene" = "SYMBOL"))
 
-# 构建 GSEA 基因列表
+# Construct ranked gene list for GSEA
 geneList <- ko_res$log2FC
-names(geneList) <- ko_res$ENTREZID  # 这里修复！！！
+names(geneList) <- ko_res$ENTREZID  # Fixed ID mapping here
 geneList <- sort(geneList, decreasing = TRUE)
 
-# 去掉无效ID
+# Remove invalid NA IDs
 geneList <- geneList[!is.na(names(geneList))]
 
 
-# ======================2.开始GSEA富集分析  ======================
+# ======================2. Perform GSEA enrichment analysis  ======================
 
-# MSigDB C2 (包含 KEGG/Reactome/BioCarta):::::::::::优选跑这个
+# MSigDB C2 (contains KEGG/Reactome/BioCarta) :::::::::::: Recommended dataset
 msig_c2 <- msigdbr(species = "Homo sapiens", category = "C2") %>%
-  dplyr::select(gs_name, entrez_gene)  # 必须保留这两列
-# 关键！把基因ID转成 字符串格式，防止匹配失败
+  dplyr::select(gs_name, entrez_gene)  # Must retain these two columns
+# Critical step: convert gene IDs to character to avoid matching failure
 names(geneList) <- as.character(names(geneList))
 gse_c2 <- GSEA(
   geneList  = geneList,
@@ -92,7 +92,7 @@ as.data.frame(gse_c2)[, c("ID", "Description", "NES", "pvalue", "p.adjust")]
 
 
 
-# GO
+# GO Biological Process enrichment
 gse_go <- gseGO(
   geneList = geneList,
   OrgDb = org.Hs.eg.db,
@@ -103,7 +103,7 @@ gse_go <- gseGO(
   seed = 123
 )
 
-# 查看显著通路
+# View significant pathways
 as.data.frame(gse_go)[, c("ID", "Description", "NES", "pvalue", "p.adjust")]
 # ID                                                               Description      NES      pvalue   p.adjust
 # GO:0098542 GO:0098542                                        defense response to other organism 2.264336 0.000451171 0.03724163
@@ -114,7 +114,7 @@ as.data.frame(gse_go)[, c("ID", "Description", "NES", "pvalue", "p.adjust")]
 # GO:0051707 GO:0051707                                                response to other organism 2.154016 0.001533479 0.03724163
 # GO:0140546 GO:0140546                                              defense response to symbiont 2.129749 0.001092333 0.03724163
 
-# Hallmark
+# Hallmark gene sets
 msig_hallmark <- msigdbr(species = "Homo sapiens", category = "H") %>%
   dplyr::select(gs_name, entrez_gene)
 
@@ -127,10 +127,10 @@ gse_hallmark <- GSEA(
   scoreType = "pos",
   seed = 123
 )
-# 查看显著通路
+# View significant pathways
 as.data.frame(gse_hallmark)[, c("ID", "Description", "NES", "pvalue")]
 
-# ReactomePA富集
+# Reactome pathway enrichment
 library(ReactomePA)
 gse_reactome <- gsePathway(
   geneList     = geneList,
@@ -142,7 +142,7 @@ gse_reactome <- gsePathway(
 )
 as.data.frame(gse_reactome)[, c("ID", "Description", "NES", "pvalue", "p.adjust")]
 
-# MSigDB C6 癌基因特征
+# MSigDB C6 oncogenic signature sets
 msig_c6 <- msigdbr(species = "Homo sapiens", category = "C6") %>%
   dplyr::select(gs_name, entrez_gene)
 gse_c6 <- GSEA(
@@ -153,7 +153,7 @@ gse_c6 <- GSEA(
 )
 as.data.frame(gse_c6)[, c("ID", "Description", "NES", "pvalue", "p.adjust")]
 
-# MSigDB C7 免疫特征
+# MSigDB C7 immunologic signature sets
 msig_c7 <- msigdbr(species = "Homo sapiens", category = "C7") %>%
   dplyr::select(gs_name, entrez_gene)
 gse_c7 <- GSEA(
@@ -167,12 +167,12 @@ as.data.frame(gse_c7)[, c("ID", "Description", "NES", "pvalue", "p.adjust")]
 
 
 
-# ======================3.画图  ======================
-# 你的GSEA结果对象（已存在）
-# 这里选择哪种富集分析结果
+# ======================3. Visualization  ======================
+# Input GSEA result object
+# Select target enrichment result for plotting
 em <- gse_c2
 
-# ====================== 3.1. 单基因集GSEA图（第1个通路） ======================
+# ====================== 3.1. Single gene set GSEA enrichment plot (Top 1 pathway) ======================
 title1 <- em$Description[1]
 filename1 <- paste0("./1_GSEA/1.", clean_filename(title1), ".pdf")
 pdf(filename1, width = 10, height = 6, pointsize = 8)
@@ -181,13 +181,13 @@ gseaplot2(em,
           title = title1,
           color = "pink",
           base_size = 10,
-          pvalue_table = TRUE,          # 【关键】显示NES、pvalue、p.adjust
+          pvalue_table = TRUE,          # Key parameter: display NES, pvalue, p.adjust
           rel_heights = c(1.5, 0.5, 1),
           subplots = 1:3)
 dev.off()
 
 
-# ====================== 3.2. 多基因集GSEA叠加图（1-8号通路） ======================
+# ====================== 3.2. Overlaid GSEA plot for multiple gene sets (Top 1-8 pathways) ======================
 title3 <- "GSEA_Enrichment"
 filename3 <- paste0("./1_GSEA/2.", clean_filename(title3), ".pdf")
 pdf(filename3, width = 10, height = 7, pointsize = 8)
@@ -203,7 +203,7 @@ dev.off()
 
 
 
-# ====================== 3.3. 气泡图（Dotplot） ======================
+# ====================== 3.3. Enrichment dot plot ======================
 title4 <- "Pathway_Enrichment"
 filename4 <- paste0("./1_GSEA//3.", clean_filename(title4), ".pdf")
 pdf(filename4, width = 6, height = 8, pointsize = 8)
@@ -218,23 +218,22 @@ dotplot(em,
         axis.text.y = element_text(size = 7))
 dev.off()
 
-# ====================== 3.4. 脊线图（Ridgeplot） ======================
+# ====================== 3.4. Ridge enrichment plot ======================
 title5 <- "GSEA Enrichment Analysis"
 filename5 <- paste0("./1_GSEA//4.2", clean_filename(title5), ".pdf")
 pdf(filename5, width = 10, height = 9, pointsize = 8)
 ridgeplot(em, 
           showCategory = 15,
-          # fill = "NES",  # "pvalue", "p.adjust","NES"都能上色
+          # fill = "NES",  # Fill options: "NES", "pvalue", "p.adjust"
           # fill = "pvalue",
           fill = "p.adjust",
           core_enrichment = FALSE) +
   scale_fill_gradientn(colours = c("lightblue", "#EFC000", "pink"),
                        name = "p.adjust") +
-  labs(title = title5, x = "Rank in Ordered Gene List") + # ✅ 横坐标改成你要的
-  xlim(0, 10) +  # 直接截断横坐标，只显示 0~10 的范围
+  labs(title = title5, x = "Rank in Ordered Gene List") + # X-axis label
+  xlim(0, 10) +  # Restrict x-axis range to 0~10
   theme(axis.text.y = element_text(size = 7),
         legend.key.height = unit(1, "cm"))
 dev.off()
 
 save.image("./1_GSEA/20260403_gsea.Rdata")
-
