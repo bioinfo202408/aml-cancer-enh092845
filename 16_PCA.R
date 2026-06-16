@@ -1,39 +1,39 @@
-# 参考：https://figureya.online/FigureYa38PCA/FigureYa38PCA.html
+# Reference: https://figureya.online/FigureYa38PCA/FigureYa38PCA.html
 
 # ==============================================================
-# Step0 环境初始化 + 路径配置
+# Step0 Environment Initialization & Path Configuration
 # ==============================================================
 rm(list = ls())
 gc()
 options(stringsAsFactors = FALSE)
 
-# 工作目录
-setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-cat("初始工作路径：", getwd(), "\n")
-# 加载全局配置
+# Working directory
+setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.Plot_Code/")
+cat("Initial working directory: ", getwd(), "\n")
+# Load global configuration script
 source("/home/weili/Project/AML/human/AML_combined_analyse/0.Enviroment.R")
 
-# 创建输出文件夹
+# Create output folder
 out_folder <- "./16_PCA/"
 dir.create(out_folder, showWarnings = F, recursive = T)
 setwd(out_folder)
-cat("当前输出目录：", getwd(), "\n")
+cat("Current output directory: ", getwd(), "\n")
 
 # =============================================================
-#=====================0.加载包、配色、椭圆函数=====================
+#=====================0. Load packages, color palette & ellipse function=====================
 
 options(stringsAsFactors = FALSE)
 library(ggplot2)
 library(plyr)
 library(dplyr)
 library(data.table)
-library(sva)   # ComBat去批次必需
+library(sva)   # Required for ComBat batch correction
 
-#固定配色
+# Fixed color palette
 mycol <- c("#223D6C","#D20A13","#088247","#FFD121","#11AA4D","#58CDD9","#7A142C",
            "#5D90BA","#431A3D","#91612D","#6E568C","#E0367A","#D8D155","#64495D","#7CC767")
 
-#置信椭圆函数
+# Confidence ellipse drawing function
 add_ellipase <- function(p, x="PC1", y="PC2", group="Group",
                          ellipase_pro = 0.95, linetype="solid", colour="black", lwd=1){
   obs <- p$data[,c(x,y,group)];colnames(obs)<-c("x","y","group")
@@ -51,7 +51,7 @@ add_ellipase <- function(p, x="PC1", y="PC2", group="Group",
   p + geom_polygon(data=ell,aes(x=x,y=y,group=group),fill=NA,colour=colour,lwd=lwd,linetype=linetype)
 }
 
-#=====================1.读取lncRNA表达+样本信息=====================
+#=====================1. Import lncRNA expression matrix & sample metadata=====================
 before_pca_train <- fread("../../Outdata/2.train_test_data/1.2.expr_train_lncRNA.csv")
 before_pca_train <- fread("../../Outdata/2.train_test_data/1.2.expr_train_miRNA.csv")
 before_pca_train <- fread("../../Outdata/2.train_test_data/1.2.expr_train_mRNA.csv")
@@ -60,50 +60,50 @@ before_pca_train <- fread("../../Outdata/2.train_test_data/1.2.expr_train_eRNA.c
 
 
 {
-#提取基因名，构建表达矩阵【基因行，样本列】
+# Extract gene names and construct expression matrix (genes as rows, samples as columns)
 gene_names <- before_pca_train$V1
 before_pca_train <- before_pca_train[,-1]
 rownames(before_pca_train) <- gene_names
 expr_raw <- as.data.frame(before_pca_train)
 rownames(expr_raw) <- gene_names
 
-#样本注释
+# Sample metadata
 sample_info <- read.csv("../../Outdata/5.all_data_harmony/5.0_all_expr_group_batch_info.csv")
 sample_info$Group <- ifelse(sample_info$Group == 1, "Tumor", "Normal")
 sample_info <- sample_info[sample_info$Set %in% "train", ]
 
-#样本取交集
+# Intersect sample IDs
 common_samp <- intersect(colnames(expr_raw), rownames(sample_info))
-cat("共有样本：",length(common_samp),"\n")
+cat("Total overlapping samples: ",length(common_samp),"\n")
 
-#原始表达矩阵（未去批次）
+# Raw expression matrix (before batch correction)
 expr_before <- expr_raw[, common_samp, drop = FALSE]
 expr_before <- apply(expr_before,2,as.numeric)
 rownames(expr_before) <- gene_names
 
-#注释同步筛选
+# Filter metadata to matched samples
 meta_df <- sample_info[common_samp,,drop=F]
-batch_vec <- meta_df$Batch    #ComBat所需批次向量
+batch_vec <- meta_df$Batch    # Batch vector required for ComBat
 group_vec <- meta_df$Group
 
-#=====================2.ComBat去除批次效应【关键】=====================
-#ComBat输入：基因行、样本列；batch=批次
+#=====================2. ComBat batch correction [Core Step]=====================
+# ComBat input format: genes as rows, samples as columns; batch = batch information
 expr_after <- ComBat(dat = expr_before, batch = batch_vec, mod = NULL)
 
-#2.TPM筛选高变异lncRNA（剔除大量全0无信息基因，关键优化）
+# 2. Filter top variable genes from TPM matrix (remove thousands of zero-expression non-informative genes, key optimization)
 gene_sd <- apply(expr_after, 1, sd)
-#优先筛选top1200高变异基因，可改1000/1500微调
+# Select top 1200 most variable genes; adjust to 1000/1500 for fine-tuning
 top_var_genes <- names(sort(gene_sd, decreasing = TRUE)[1:1200])
 expr_filter <- expr_after[top_var_genes, ]
 
-#3.PCA参数适配TPM：lncRNA表达跨度悬殊，scale=F保留原始丰度差异
-#修改封装函数内PCA：center=T, scale=F
-#=====================PCA绘图函数=====================
+# 3. PCA parameter adaptation for TPM: lncRNA expression spans wide dynamic range, set scale=F to retain original abundance differences
+# PCA setting inside wrapped function: center=T, scale=F
+#=====================PCA plotting wrapper function=====================
 plot_pca_wrap <- function(expr_in, save_prefix){
-  # 关键：剔除整行方差=0的基因，杜绝奇异矩阵SVD报错
+  # Critical step: remove genes with zero variance to avoid singular matrix SVD error
   g_sd <- apply(expr_in,1,sd)
   expr_in <- expr_in[g_sd > 1e-6, , drop=F]
-  if(nrow(expr_in)<50) stop("有效基因过少")
+  if(nrow(expr_in)<50) stop("Insufficient valid genes for PCA")
   
   pca.res <- prcomp(t(expr_in), center = TRUE, scale. = FALSE)
   pca.pv <- summary(pca.res)$importance[2,]
@@ -114,7 +114,7 @@ plot_pca_wrap <- function(expr_in, save_prefix){
   low_df$Group <- factor(meta_df$Group)
   low_df$Batch <- meta_df$Batch
   
-  #分组PCA
+  # PCA colored by disease group
   p1 <- ggplot(low_df)+
     geom_point(aes(PC1,PC2,color=Group),size=2,alpha=0.6,shape=20)+
     scale_color_manual(values=mycol[1:nlevels(low_df$Group)])+
@@ -124,7 +124,7 @@ plot_pca_wrap <- function(expr_in, save_prefix){
   p1_fin <- add_ellipase(p1, ellipase_pro=0.95, colour="dimgray", linetype=1, lwd=1)
   ggsave(paste0(save_prefix,"_PCA_Manual_Group.pdf"),p1_fin,width=5,height=5)
   
-  #批次PCA
+  # PCA colored by batch
   n_batch <- length(unique(low_df$Batch))
   col_batch <- colorRampPalette(mycol)(n_batch)
   p2 <- ggplot(low_df)+
@@ -137,26 +137,25 @@ plot_pca_wrap <- function(expr_in, save_prefix){
 }
 
 
-#=====================4.分别画【去批次前、去批次后】4张图=====================
-#去批次前 Before
+#=====================4. Generate 4 plots for data before and after batch correction=====================
+# Before ComBat correction
 plot_pca_wrap(expr_before, save_prefix = "lncrna_Before_trian")
-#ComBat去批次后 After
+# After ComBat correction
 plot_pca_wrap(expr_filter, save_prefix = "lncrna_After_trian")
 
-
-#去批次前 Before
+# Before ComBat correction
 plot_pca_wrap(expr_before, save_prefix = "mirna_Before_trian")
-#ComBat去批次后 After
+# After ComBat correction
 plot_pca_wrap(expr_filter, save_prefix = "mirna_After_trian")
 
-#去批次前 Before
+# Before ComBat correction
 plot_pca_wrap(expr_before, save_prefix = "mrna_Before_trian")
-#ComBat去批次后 After
+# After ComBat correction
 plot_pca_wrap(expr_filter, save_prefix = "mrna_After_trian")
 
-#去批次前 Before
+# Before ComBat correction
 plot_pca_wrap(expr_before, save_prefix = "erna_Before_trian")
-#ComBat去批次后 After
+# After ComBat correction
 plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 
 
@@ -169,27 +168,27 @@ plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 
 
 
-# #下面只针对miRNA
+# # The following section only processes miRNA data
 # 
 # 
 # 
 # # ==============================================================
-# # Step0 环境初始化 + 路径配置
+# # Step0 Environment Initialization & Path Configuration
 # # ==============================================================
 # rm(list = ls())
 # gc()
 # options(stringsAsFactors = FALSE)
 # 
-# setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码/")
-# cat("初始工作路径：", getwd(), "\n")
+# setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.Plot_Code/")
+# cat("Initial working directory: ", getwd(), "\n")
 # source("/home/weili/Project/AML/human/AML_combined_analyse/0.Enviroment.R")
 # 
 # out_folder <- "./16_PCA/"
 # dir.create(out_folder, showWarnings = F, recursive = T)
 # setwd(out_folder)
-# cat("当前输出目录：", getwd(), "\n")
+# cat("Current output directory: ", getwd(), "\n")
 # 
-# #=====================0.加载包、配色、椭圆函数=====================
+# #=====================0. Load packages, color palette & ellipse function=====================
 # library(ggplot2)
 # library(plyr)
 # library(dplyr)
@@ -216,11 +215,11 @@ plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 #   p + geom_polygon(data=ell,aes(x=x,y=y,group=group),fill=NA,colour=colour,lwd=lwd,linetype=linetype)
 # }
 # 
-# #=====================PCA绘图函数（内置去零方差，避免SVD报错）=====================
+# #=====================PCA plotting wrapper function (built-in zero-variance removal to avoid SVD error)=====================
 # plot_pca_wrap <- function(expr_in, save_prefix){
 #   g_sd <- apply(expr_in,1,sd)
 #   expr_in <- expr_in[g_sd > 1e-6, , drop=F]
-#   if(nrow(expr_in)<50) stop("有效基因不足，无法PCA")
+#   if(nrow(expr_in)<50) stop("Insufficient valid genes for PCA")
 #   
 #   pca.res <- prcomp(t(expr_in), center = TRUE, scale. = FALSE)
 #   pca.pv <- summary(pca.res)$importance[2,]
@@ -231,7 +230,7 @@ plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 #   low_df$Group <- factor(meta_df$Group)
 #   low_df$Batch <- meta_df$Batch
 #   
-#   #分组PCA
+#   # PCA colored by disease group
 #   p1 <- ggplot(low_df)+
 #     geom_point(aes(PC1,PC2,color=Group),size=2,alpha=0.6,shape=20)+
 #     scale_color_manual(values=mycol[1:nlevels(low_df$Group)])+
@@ -241,7 +240,7 @@ plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 #   p1_fin <- add_ellipase(p1, ellipase_pro=0.95, colour="dimgray", linetype=1, lwd=1)
 #   ggsave(paste0(save_prefix,"_PCA_Manual_Group.pdf"),p1_fin,width=5,height=5)
 #   
-#   #批次PCA
+#   # PCA colored by batch
 #   n_batch <- length(unique(low_df$Batch))
 #   col_batch <- colorRampPalette(mycol)(n_batch)
 #   p2 <- ggplot(low_df)+
@@ -252,7 +251,7 @@ plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 #   ggsave(paste0(save_prefix,"_PCA_BatchCheck.pdf"),p2,width=8,height=5)
 # }
 # 
-# #=====================1.读取lncRNA数据=====================
+# #=====================1. Import lncRNA expression data=====================
 # before_pca_train <- fread("../../Outdata/2.train_test_data/1.2.expr_train_miRNA.csv")
 # 
 # gene_names <- before_pca_train$V1
@@ -261,13 +260,13 @@ plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 # expr_raw <- as.data.frame(before_pca_train)
 # rownames(expr_raw) <- gene_names
 # 
-# #样本注释
+# # Sample metadata
 # sample_info <- read.csv("../../Outdata/5.all_data_harmony/5.0_all_expr_group_batch_info.csv")
 # sample_info$Group <- ifelse(sample_info$Group == 1, "Tumor", "Normal")
 # sample_info <- sample_info[sample_info$Set %in% "train", ]
 # 
 # common_samp <- intersect(colnames(expr_raw), rownames(sample_info))
-# cat("共有样本：",length(common_samp),"\n")
+# cat("Total overlapping samples: ",length(common_samp),"\n")
 # 
 # expr_before <- expr_raw[, common_samp, drop = FALSE]
 # expr_before <- apply(expr_before,2,as.numeric)
@@ -276,15 +275,15 @@ plot_pca_wrap(expr_filter, save_prefix = "erna_After_trian")
 # meta_df <- sample_info[common_samp,,drop=F]
 # batch_vec <- meta_df$Batch
 # 
-# #=====================2.ComBat校正=====================
+# #=====================2. ComBat batch correction=====================
 # expr_after <- ComBat(dat = expr_before, batch = batch_vec, mod = NULL)
 # 
-# # 只在校正后现存基因里筛选高变异【修复下标越界核心】
+# # Only select variable genes from corrected matrix [core fix for subscript out of bounds]
 # gene_sd <- apply(expr_after, 1, sd)
 # select_num <- min(1200, length(gene_sd))
 # top_var_genes <- names(sort(gene_sd, decreasing = TRUE)[1:select_num])
 # expr_filter <- expr_after[top_var_genes, ]
 # 
-# #=====================3.出图=====================
+# #=====================3. Generate PCA figures=====================
 # plot_pca_wrap(expr_before, save_prefix = "lncrna_Before_trian")
 # plot_pca_wrap(expr_filter, save_prefix = "mirna_After_trian")
