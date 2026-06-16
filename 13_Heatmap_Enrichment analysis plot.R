@@ -1,25 +1,27 @@
-# 参考：https://mp.weixin.qq.com/s/dmeB9m5ePK74MXeMOBmpug  顶刊图社 | 第059期：基因聚类富集注释热图  折线+热图+富集分析+通路+单细胞
-# 参考：https://mp.weixin.qq.com/s/FvTsDSOUgobz4hjouarN0g
+# Reference: https://mp.weixin.qq.com/s/dmeB9m5ePK74MXeMOBmpug
+# Top Journal Figure Library | Issue 059: Gene Clustering, Enrichment Annotation Heatmap
+# Line plot + Heatmap + Enrichment Analysis + Pathway + Single-cell
+# Reference: https://mp.weixin.qq.com/s/FvTsDSOUgobz4hjouarN0g
 
-# 清空环境并加载必要的包
+# Clear environment and load required packages
 rm(list = ls())
-gc() #清理内存中不再使用的对象
+gc() # Clean unused objects in memory
 
-# 设置工作路径
+# Set working directory
 setwd("/home/weili/Project/AML/human/AML_combined_analyse/0.画图代码//")
-cat("【初始化】当前工作路径：", getwd(), "\n\n")
+cat("[Initialization] Current working directory: ", getwd(), "\n\n")
 source("/home/weili/Project/AML/human/AML_combined_analyse//0.Enviroment.R")
-dir.create("./13_热图_富集分析_图/", showWarnings = F, recursive = T)
+dir.create("./13_Heatmap_Enrichment_Analysis_Figures/", showWarnings = F, recursive = T)
 
 
 
-##########################折线+热图+富集分析+通路+单细胞######################################
-# 1. 加载包（如果没装，看文末安装方法）
+########################## Line Plot + Heatmap + Enrichment Analysis + Pathway + Single-cell ######################################
+# 1. Load packages (installation guide at the end if not installed)
 # devtools::install_github("junjunlab/ClusterGVis")
 library(ClusterGVis)
 library(Seurat)
 library(tidyverse)
-library(org.Hs.eg.db)  # 人源数据库
+library(org.Hs.eg.db)  # Human gene annotation database
 library(ggsci)
 library(ComplexHeatmap)
 library(qs)
@@ -27,63 +29,63 @@ library(qs)
 
 
 
-# 3. 加载你已经有的数据（你已经运行过了）
-load("../scRNA_analyse/20260407分析结果_GSE1116256/rawdata/Step6.celltype.markers.0.25.Rdata")
+# 3. Load preprocessed data
+load("../scRNA_analyse/20260407_Analysis_Results_GSE1116256/rawdata/Step6.celltype.markers.0.25.Rdata")
 head(ct.marker)
-seurat.data = qread(file = "../scRNA_analyse/20260407分析结果_GSE1116256//rawdata/Step3.annotation.qs")
+seurat.data = qread(file = "../scRNA_analyse/20260407_Analysis_Results_GSE1116256//rawdata/Step3.annotation.qs")
 
 
 
-# 4. 提取每个细胞群 TOP 20 个 marker 基因
+# 4. Extract TOP 20 marker genes per cell cluster
 markers <- ct.marker %>%
   group_by(cluster) %>%
   top_n(n = 20, wt = avg_log2FC)
 
-# 5. 从你的Seurat对象生成表达矩阵（关键！）
-# 把 scRNA 对象替换成你自己的 Seurat 对象名称！！！
+# 5. Generate expression matrix from Seurat object (critical step!)
+# Replace scRNA object name with your own Seurat object name!!!
 st.data <- prepareDataFromscRNA(
   object = seurat.data,
   diffData = markers,
   showAverage = TRUE
 )
 
-# 6. GO富集分析（给每个cluster加功能注释）
+# 6. GO enrichment analysis (add functional annotations for each cluster)
 enrich <- enrichCluster(
   object = st.data,
   OrgDb = org.Hs.eg.db,
-  type = "BP",          # 生物过程BP，也可换"MF"、"CC"、"KEGG"
+  type = "BP",          # Biological Process; can switch to "MF", "CC", "KEGG"
   organism = "hsa",
   pvalueCutoff = 0.5,
-  topn = 5,            # 每个cluster展示5个富集条目
+  topn = 5,            # Display top 5 enriched terms per cluster
   seed = 123
 )
 
-# 7. 随机标记40个基因名在图上（可改数量）
+# 7. Randomly label 40 gene names on plot (adjustable number)
 set.seed(123)
 markGenes <- sample(unique(markers$gene), 40)
 
 
-# line plot
-pdf("./13_热图_聚类树/1.pdf")
+# Line plot only
+pdf("./13_Heatmap_ClusterTree/1.pdf")
 visCluster(object = st.data,           
            plotType  = "both")
 dev.off()
 
 
-pdf('./13_热图_聚类树/单细胞不同亚群富集分析.pdf', height = 10, width = 16, onefile = F)
+pdf('./13_Heatmap_ClusterTree/SingleCell_Subpopulation_Enrichment_Analysis.pdf', height = 10, width = 16, onefile = F)
 visCluster(
   object = st.data,
   plotType = "both",
   column_names_rot = 45,
-  showRowNames = FALSE,                # 注意驼峰
+  showRowNames = FALSE,                
   markGenes = markGenes,
-  markGenesSide = "left",             # 改为 markGenesSide
-  annoTermData = enrich,              # 改为 annoTermData
-  lineSide = "left",                  # 改为 lineSide
-  goCol = rep(ggsci::pal_d3()(length(unique(markers$cluster))), each = 5),  # goCol
-  goSize = "pval",                    # goSize
-  addBar = TRUE,                      # addBar
-  textbarPos = c(0.8, 0.2)           # textbarPos
+  markGenesSide = "left",             
+  annoTermData = enrich,              
+  lineSide = "left",                  
+  goCol = rep(ggsci::pal_d3()(length(unique(markers$cluster))), each = 5),
+  goSize = "pval",                    
+  addBar = TRUE,                      
+  textbarPos = c(0.8, 0.2)           
 )
 dev.off()
 
@@ -91,37 +93,37 @@ dev.off()
 
 
 
-###  自定义不同亚群的顺序
-# 查看当前列顺序（去掉最后两列）
+### Customize subpopulation order
+# Check current column order (exclude last two columns)
 current_cols <- colnames(st.data$wide.res)[1:(ncol(st.data$wide.res)-2)]
 print(current_cols)
 # "HSC/MPP"     "Mono/Mac"    "B cell"      "T cell"      "Dendritic"   "Erythro"     "Plasma cell"
 
-# 定义你想要的顺序（注意名称必须与当前完全一致）
+# Define target order (names must match original labels exactly)
 desired_order <- c("Dendritic","Mono/Mac",  "T cell", "B cell", "Plasma cell", "HSC/MPP", "Erythro")
 
-# 重新排列 st.data$wide.res 的列
+# Reorder columns of st.data$wide.res
 st.data$wide.res <- st.data$wide.res[, c(desired_order, "gene", "cluster")]
 
-# 同时调整 st.data$long.res 中 cell_type 的因子水平，保持折线图分组顺序一致
+# Adjust factor levels of cell_type in st.data$long.res to align line plot grouping order
 st.data$long.res$cell_type <- factor(st.data$long.res$cell_type, levels = desired_order)
 
-# 在 visCluster 中关闭列聚类，避免自动重排
-pdf('./13_热图_聚类树/单细胞不同亚群富集分析_自定义顺序.pdf', height = 10, width = 14, onefile = F)
+# Disable column clustering in visCluster to avoid automatic reordering
+pdf('./13_Heatmap_ClusterTree/SingleCell_Subpopulation_Enrichment_Analysis_CustomOrder.pdf', height = 10, width = 14, onefile = F)
 visCluster(
   object = st.data,
   plotType = "both",
-  clusterColumns = FALSE,   # 关键：禁止对列重新聚类
+  clusterColumns = FALSE,   # Critical: disable automatic column clustering
   column_names_rot = 45,
-  showRowNames = FALSE,                # 注意驼峰
+  showRowNames = FALSE,                
   markGenes = markGenes,
-  markGenesSide = "left",             # 改为 markGenesSide
-  annoTermData = enrich,              # 改为 annoTermData
-  lineSide = "left",                  # 改为 lineSide
-  goCol = rep(ggsci::pal_d3()(length(unique(markers$cluster))), each = 5),  # goCol
-  goSize = "pval",                    # goSize
-  addBar = TRUE,                      # addBar
-  textbarPos = c(0.8, 0.2)           # textbarPos
+  markGenesSide = "left",             
+  annoTermData = enrich,              
+  lineSide = "left",                  
+  goCol = rep(ggsci::pal_d3()(length(unique(markers$cluster))), each = 5),
+  goSize = "pval",                    
+  addBar = TRUE,                      
+  textbarPos = c(0.8, 0.2)           
 )
 dev.off()
 
@@ -133,17 +135,18 @@ dev.off()
 
 
 
-######################### FWSE特征选择热图（ComplexHeatmap 论文版） ######################################
-# 完全使用你的数据路径 + 自动分组 + 自动拆分上下调基因 + 高清PDF
+######################### FWSE Feature Selection Heatmap (Publication-level ComplexHeatmap) ######################################
+# Use original file paths + automatic grouping + auto split up/down-regulated genes + high-resolution PDF
 ###########################################################################################
 
-# 加载包
+# Load packages
 library(ComplexHeatmap)
 library(circlize)
 library(dplyr)
+library(data.table)
 
-# ===================== 1. 读取数据（和你原来完全一样） 
-# mRNA（当前运行）
+# ===================== 1. Import raw expression data (unchanged from original code) 
+# mRNA (active running module)
 # miRNA_train_expr <- fread("../Outdata/2.train_test_data/1.2.expr_train_mRNA.csv")
 # used_gene <- read.table("../Outdata/4.FWSE/4.1_FWSE_mRNA_8_flod.txt")
 
@@ -162,54 +165,54 @@ used_gene <- read.table("../Outdata/4.FWSE/4.1_FWSE_eRNA_8_flod.txt")
 {
 sample_info_train <- read.csv("../Outdata/2.train_test_data/2.2.train_samples_info.csv", header = TRUE, row.names = 1)
 
-# ===================== 2. 筛选FWSE特征基因 
+# ===================== 2. Filter FWSE signature genes 
 used_gene <- used_gene$V1
 names_gene <- miRNA_train_expr$V1
 miRNA_train_expr <- miRNA_train_expr[, -1]
 miRNA_train_expr <- as.data.frame(miRNA_train_expr)
 rownames(miRNA_train_expr) <- names_gene
 head(rownames(miRNA_train_expr) )
-hmExp <- miRNA_train_expr[used_gene, ]  # 行：基因，列：样本
+hmExp <- miRNA_train_expr[used_gene, ]  # Rows: genes, Columns: samples
 
-# 去除基因版本号
+# Remove gene version suffix
 rownames(hmExp) <- sapply(strsplit(rownames(hmExp), "\\."), `[`, 1)
 
-# ===================== 3. 数据清洗
+# ===================== 3. Data preprocessing & cleaning
 bad_rows <- apply(hmExp, 1, function(row) anyNA(row) | any(is.infinite(row)) | any(is.nan(row)))
 hmExp <- hmExp[!bad_rows, , drop = FALSE]
-cat("清洗后基因数量：", nrow(hmExp), "\n")
+cat("Gene count after cleaning: ", nrow(hmExp), "\n")
 
-# ===================== ✅ 修复点：ComplexHeatmap 手动行标准化 
-hmExp <- t(scale(t(hmExp)))  # 基因行 Z-score 标准化（替代 scale="row"）
+# ===================== ✅ Fix: Manual row-wise normalization for ComplexHeatmap 
+hmExp <- t(scale(t(hmExp)))  # Gene-wise Z-score normalization (replaces scale="row")
 
-# ===================== 4. 核心：自动拆分样本顺序（Tumor 在前，Normal 在后）
+# ===================== 4. Core step: Auto sort samples (Tumor first, Normal second)
 sample_info_filter <- sample_info_train[colnames(hmExp), , drop = FALSE]
 
-# 提取 Tumor / Normal 样本
+# Extract Tumor / Normal sample IDs
 tumor_samp <- rownames(sample_info_filter)[sample_info_filter$Group == "Tumor"]
 normal_samp <- rownames(sample_info_filter)[sample_info_filter$Group == "Normal"]
 
-# 重新排序列：Tumor → Normal
+# Reorder columns: Tumor followed by Normal
 hmExp_reordered <- hmExp[, c(tumor_samp, normal_samp)]
 
-# 样本注释
+# Sample group annotation vector
 group_anno <- c(rep("Tumor", length(tumor_samp)), rep("Normal", length(normal_samp)))
 
-# ===================== 5. 绘图配色（和你目标图完全一致） 
-# 蓝-白-红 配色
+# ===================== 5. Plot color palette (matched target figure style) 
+# Blue-White-Red gradient
 heat_colors <- colorRamp2(c(-2, 0, 2), c("#3A3E96", "#F7F7F7", "#AD3D3E"))
 
-# 分组颜色
+# Group annotation colors
 group_colors <- c(Tumor = "#AA899D", Normal = "#50A293")
 
-# ===================== 6. 绘制 ComplexHeatmap（论文级） 
-# 输出路径（直接用你的文件夹）
-# pdf("./13_热图_富集分析_图/mRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
-# pdf("./13_热图_富集分析_图/miRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
-# pdf("./13_热图_富集分析_图/lncRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
-pdf("./13_热图_富集分析_图/eRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
+# ===================== 6. Draw publication-standard ComplexHeatmap 
+# Output path (reuse defined folder)
+# pdf("./13_Heatmap_Enrichment_Analysis_Figures/mRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
+# pdf("./13_Heatmap_Enrichment_Analysis_Figures/miRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
+# pdf("./13_Heatmap_Enrichment_Analysis_Figures/lncRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
+pdf("./13_Heatmap_Enrichment_Analysis_Figures/eRNA_FWSE_ComplexHeatmap3.pdf", width = 5, height = 10)
 
-# 顶部样本注释
+# Top sample group annotation
 column_ha <- HeatmapAnnotation(
   Type = group_anno,
   col = list(Type = group_colors),
@@ -217,67 +220,67 @@ column_ha <- HeatmapAnnotation(
   show_legend = TRUE
 )
 
-# 绘制热图（已删除 scale="row"）
+# Generate heatmap (scale="row" removed)
 ht <- Heatmap(
   hmExp_reordered,
   name = "z-score",
-  cluster_columns = FALSE,        # 样本不聚类
-  cluster_rows = TRUE,            # 基因聚类
-  show_row_names = FALSE,         # 不显示基因名（太多）
-  show_column_names = FALSE,      # 不显示样本名
-  top_annotation = column_ha,     # 样本分组注释
-  col = heat_colors,              # 配色
-  row_km = 2,                     # Kmeans 自动分成 2 簇（上调/下调）；如果都是上调或者下调，修改为1
-  column_split = factor(group_anno, levels = c("Tumor", "Normal")),  # 分组分割线
-  border = TRUE,                  # 热图边框
+  cluster_columns = FALSE,        # Disable sample clustering
+  cluster_rows = TRUE,            # Enable gene clustering
+  show_row_names = FALSE,         # Hide gene labels (too many features)
+  show_column_names = FALSE,      # Hide sample labels
+  top_annotation = column_ha,     # Attach sample group annotation
+  col = heat_colors,              # Expression color gradient
+  row_km = 2,                     # Kmeans split into 2 clusters (up / down regulated); set to 1 if all genes share one trend
+  column_split = factor(group_anno, levels = c("Tumor", "Normal")),  # Add split lines between groups
+  border = TRUE,                  # Draw heatmap outer border
   heatmap_legend_param = list(
     title = "Expression\nz-score",
     title_position = "leftcenter-rot"
   )
 )
 
-# 输出热图
+# Render heatmap object
 ht <- draw(ht)
 
-# ===================== 7. 自动提取 上调/下调 基因簇
+# ===================== 7. Auto extract up-regulated / down-regulated gene clusters
 row_clusters <- row_order(ht)
 
 if (length(row_clusters) == 2) {
   cluster1_genes <- rownames(hmExp_reordered)[row_clusters[[1]]]
   cluster2_genes <- rownames(hmExp_reordered)[row_clusters[[2]]]
 } else {
-  stop("聚类簇数量不是2，请检查")
+  stop("Detected cluster count not equal to 2, please check data")
 }
 
 dev.off()
 }
-# ===================== 8. 导出上下调基因
+# ===================== 8. Export gene lists of two clusters
 write.table(cluster1_genes,
-            file = "./13_热图_富集分析_图/eRNA_up_FWSE_genes.txt",
+            file = "./13_Heatmap_Enrichment_Analysis_Figures/eRNA_up_FWSE_genes.txt",
             quote = FALSE, row.names = FALSE, col.names = FALSE)
 
 write.table(cluster2_genes,
-            file = "./13_热图_富集分析_图/eRNA_down_FWSE_genes.txt",
+            file = "./13_Heatmap_Enrichment_Analysis_Figures/eRNA_down_FWSE_genes.txt",
             quote = FALSE, row.names = FALSE, col.names = FALSE)
 
 
 
 
-######################### FWSE特征选择热图-外部验证集 GSE103424 ######################################
-# 加载包
+######################### FWSE Feature Heatmap - External Validation Cohort GSE103424 ######################################
+# Load packages
 library(ComplexHeatmap)
 library(circlize)
 library(dplyr)
 library(data.table)
 
-#========= 1.读入外部验证集表达矩阵 GSE103424 
+#========= 1. Load external validation cohort expression matrix GSE103424 
 vali_exp <- fread("../../TCGA_data/all_GSE103424_GTEX_sample_clean_expr.csv")
 gene_name <- vali_exp$gene_name
 vali_exp <- vali_exp[,c(701:790)]
 rownames(vali_exp) <- gene_name
 
-#========= 2.批量读取四类特征基因，循环绘图（miRNA/mRNA/lncRNA/eRNA）
-# 配置基因文件与输出文件名映射
+#========= 2. Batch import four types of feature genes and loop plotting (miRNA/mRNA/lncRNA/eRNA)
+# Mapping between gene file path and output figure name
 gene_list = list(
   miRNA = list(gfile="../../Outdata/4.FWSE/4.1_FWSE_miRNA_8_flod.txt", outname="miRNA"),
   mRNA  = list(gfile="../../Outdata/4.FWSE/4.1_FWSE_mRNA_8_flod.txt", outname="mRNA"),
@@ -285,34 +288,34 @@ gene_list = list(
   eRNA  = list(gfile="../../Outdata/4.FWSE/4.1_FWSE_eRNA_8_flod.txt", outname="eRNA")
 )
 
-# 批量循环绘图
+# Batch loop for heatmap generation
 for(nam in names(gene_list)){
   info = gene_list[[nam]]
   gene_set = read.table(info$gfile)
   hmExp = vali_exp[rownames(vali_exp) %in% gene_set$V1, ]
   
-  # 3.数据清洗：剔除NA/无穷值行
+  # 3. Data cleaning: remove rows containing NA / infinite values
   bad_rows <- apply(hmExp, 1, function(row) anyNA(row) | any(is.infinite(row)) | any(is.nan(row)))
   hmExp <- hmExp[!bad_rows, , drop = FALSE]
-  cat(info$outname,"清洗后基因数量：", nrow(hmExp), "\n")
+  cat(info$outname,"Gene count after cleaning: ", nrow(hmExp), "\n")
   
-  # 行Z-score标准化（基因标准化）
+  # Row-wise Z-score normalization for genes
   hmExp <- t(scale(t(hmExp)))
   
-  #=========关键：根据样本名自动分组 SRR=Tumor / 其余=Normal
+  #========= Critical: Auto grouping by sample ID prefix (SRR = Tumor / others = Normal)
   samp_all = colnames(hmExp)
   group_vec = ifelse(grepl("^SRR",samp_all),"Tumor","Normal")
-  # 拆分样本顺序：Tumor在前，Normal在后
+  # Reorder samples: Tumor first, Normal second
   tumor_samp = samp_all[group_vec=="Tumor"]
   normal_samp = samp_all[group_vec=="Normal"]
   hmExp_reordered = hmExp[,c(tumor_samp,normal_samp)]
   group_anno = c(rep("Tumor",length(tumor_samp)),rep("Normal",length(normal_samp)))
   
-  # 配色
+  # Color scheme
   heat_colors <- colorRamp2(c(-2, 0, 2), c("#3A3E96", "#F7F7F7", "#AD3D3E"))
   group_colors <- c(Tumor = "#AA899D", Normal = "#50A293")
   
-  # 样本顶部注释
+  # Sample top annotation
   column_ha <- HeatmapAnnotation(
     Type = group_anno,
     col = list(Type = group_colors),
@@ -320,10 +323,10 @@ for(nam in names(gene_list)){
     show_legend = TRUE
   )
   
-  # 打开pdf
+  # Open PDF device
   pdf(paste0(".//",info$outname,"_FWSE_ComplexHeatmap_GSE165656.pdf"), width = 5, height = 10)
   
-  # 绘制热图
+  # Generate heatmap
   ht <- Heatmap(
     hmExp_reordered,
     name = "z-score",
@@ -333,7 +336,7 @@ for(nam in names(gene_list)){
     show_column_names = FALSE,      
     top_annotation = column_ha,     
     col = heat_colors,              
-    row_km = 2,                     # Kmeans分成上下调2簇
+    row_km = 2,                     # Kmeans split into up/down regulated clusters
     column_split = factor(group_anno, levels = c("Tumor", "Normal")),
     border = TRUE,                  
     heatmap_legend_param = list(
@@ -344,17 +347,17 @@ for(nam in names(gene_list)){
   ht <- draw(ht)
   dev.off()
   
-  # 提取聚类分簇基因
+  # Extract genes from two Kmeans clusters
   row_clusters <- row_order(ht)
   if (length(row_clusters) == 2) {
     cluster1_genes <- rownames(hmExp_reordered)[row_clusters[[1]]]
     cluster2_genes <- rownames(hmExp_reordered)[row_clusters[[2]]]
   } else {
-    warning(paste0(info$outname,"聚类不是2簇，跳过导出"))
+    warning(paste0(info$outname,"Cluster number not equal to 2, skip gene export"))
     next
   }
   
-  # 导出上下调基因
+  # Output gene lists
   write.table(cluster1_genes,
               file = paste0("./",info$outname,"_up_FWSE_genes.txt"),
               quote = FALSE, row.names = FALSE, col.names = FALSE)
@@ -363,5 +366,3 @@ for(nam in names(gene_list)){
               file = paste0(".//",info$outname,"_down_FWSE_genes.txt"),
               quote = FALSE, row.names = FALSE, col.names = FALSE)
 }
-
-
